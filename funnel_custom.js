@@ -29,7 +29,7 @@ looker.plugins.visualizations.add({
       type: "string",
       label: "Couleurs (JSON array)",
       display: "text",
-      default: '["#2563eb","#f97316","#22c55e","#a855f7","#ec4899"]',
+      default: '["#2563eb","#f97316","#22c55e"]',
       section: "Style",
       order: 4
     },
@@ -43,6 +43,15 @@ looker.plugins.visualizations.add({
       default: 0.35,
       section: "Style",
       order: 5
+    },
+    field_order: {
+      type: "string",
+      label: "Ordre des champs (JSON array de noms de mesures)",
+      display: "text",
+      default: '[]',
+      section: "Data",
+      order: 1,
+      placeholder: '["measure1","measure2","measure3"]'
     }
   },
 
@@ -67,9 +76,9 @@ looker.plugins.visualizations.add({
     var style = document.createElement('style');
     style.textContent = [
       '@keyframes fadeInDown{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}',
-      '@keyframes growWidth{from{clip-path:inset(0 100% 0 0)}to{clip-path:inset(0 0% 0 0)}}',
+      '@keyframes growWidth{from{width:0}to{}}',
       '.fcs-row{opacity:0;animation:fadeInDown .4s ease forwards}',
-      '.fcs-bar-fill{animation:growWidth .6s cubic-bezier(.4,0,.2,1) forwards}',
+      '.fcs-bar-fill{animation:growWidth .7s cubic-bezier(.4,0,.2,1) forwards;animation-fill-mode:both}',
       '.fcs-row:hover .fcs-bar-fill{filter:brightness(1.08)}',
       '.fcs-row:hover .fcs-value{font-weight:700}'
     ].join('');
@@ -86,18 +95,42 @@ looker.plugins.visualizations.add({
       done(); return;
     }
 
-    var dimField   = queryResponse.fields.dimension_like[0];
-    var measField  = queryResponse.fields.measure_like[0];
-    if (!dimField || !measField) { done(); return; }
+    // Lire toutes les mesures disponibles
+    var measures = queryResponse.fields.measure_like;
+    if (!measures || measures.length === 0) {
+      root.innerHTML = '<p style="color:#999;font-size:13px">Aucune mesure trouvée</p>';
+      done(); return;
+    }
 
-    var rows = data.map(function(row) {
+    // Optionnel : ordre personnalisé via l'option field_order
+    var fieldOrder = [];
+    try { fieldOrder = JSON.parse(config.field_order || '[]'); } catch(e) {}
+
+    var orderedMeasures;
+    if (fieldOrder.length > 0) {
+      orderedMeasures = fieldOrder.map(function(name) {
+        return measures.find(function(m) { return m.name === name; });
+      }).filter(Boolean);
+    } else {
+      orderedMeasures = measures;
+    }
+
+    // Construire les étapes à partir de la 1ère ligne de données
+    var row0 = data[0];
+    var steps = orderedMeasures.map(function(m) {
+      var cell = row0[m.name];
       return {
-        label: row[dimField.name].value,
-        value: row[measField.name].value
+        label: m.label_short || m.label || m.name,
+        value: cell ? (cell.value || 0) : 0
       };
     });
 
-    var maxVal = rows[0].value;
+    var maxVal = steps[0].value;
+    if (!maxVal || maxVal === 0) {
+      root.innerHTML = '<p style="color:#999;font-size:13px">Valeurs nulles</p>';
+      done(); return;
+    }
+
     var neckRatio = config.neck_ratio || 0.35;
     var showPct   = config.show_percentages !== false;
     var showDrop  = config.show_dropoff !== false;
@@ -109,21 +142,20 @@ looker.plugins.visualizations.add({
     var labelColors;
     try { labelColors = JSON.parse(config.label_color_overrides || '{}'); } catch(e) { labelColors = {}; }
 
-    var containerW = root.offsetWidth || 600;
-    var rowH = Math.max(44, Math.min(72, Math.floor((root.offsetHeight - 32) / rows.length) - 12));
+    var rowH = Math.max(44, Math.min(72, Math.floor((root.offsetHeight - 32) / steps.length) - 12));
 
-    rows.forEach(function(row, i) {
-      var pct   = maxVal > 0 ? row.value / maxVal : 0;
-      var dropPct = (i > 0 && rows[i-1].value > 0)
-        ? Math.round((1 - row.value / rows[i-1].value) * 100)
+    steps.forEach(function(step, i) {
+      var pct      = maxVal > 0 ? step.value / maxVal : 0;
+      var dropPct  = (i > 0 && steps[i-1].value > 0)
+        ? Math.round((1 - step.value / steps[i-1].value) * 100)
         : null;
 
-      var widthPct   = neckRatio + (1 - neckRatio) * (1 - i / Math.max(rows.length - 1, 1));
+      var widthPct    = neckRatio + (1 - neckRatio) * (1 - i / Math.max(steps.length - 1, 1));
       var barWidthPct = widthPct * pct * 100;
 
       var color   = colors[i % colors.length];
       var bgColor = hexToRgba(color, 0.08);
-      var labelC  = labelColors[row.label] || '#1a1a2e';
+      var labelC  = labelColors[step.label] || '#1a1a2e';
 
       var rowEl = document.createElement('div');
       rowEl.className = 'fcs-row';
@@ -136,49 +168,24 @@ looker.plugins.visualizations.add({
       ].join(';');
 
       var label = document.createElement('div');
-      label.style.cssText = [
-        'display:flex',
-        'align-items:center',
-        'justify-content:space-between',
-        'margin-bottom:4px',
-        'padding:0 2px'
-      ].join(';');
+      label.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;padding:0 2px';
 
       var labelText = document.createElement('span');
-      labelText.style.cssText = [
-        'font-size:13px',
-        'font-weight:500',
-        'color:' + labelC,
-        'letter-spacing:-.01em'
-      ].join(';');
-      labelText.textContent = row.label;
+      labelText.style.cssText = 'font-size:13px;font-weight:500;color:' + labelC + ';letter-spacing:-.01em';
+      labelText.textContent = step.label;
 
       var metaBox = document.createElement('span');
       metaBox.style.cssText = 'display:flex;align-items:center;gap:8px';
 
       var valSpan = document.createElement('span');
       valSpan.className = 'fcs-value';
-      valSpan.style.cssText = [
-        'font-size:13px',
-        'font-weight:600',
-        'color:#1a1a2e',
-        'font-variant-numeric:tabular-nums',
-        'transition:font-weight .15s'
-      ].join(';');
-      valSpan.textContent = formatNum(row.value);
+      valSpan.style.cssText = 'font-size:13px;font-weight:600;color:#1a1a2e;font-variant-numeric:tabular-nums;transition:font-weight .15s';
+      valSpan.textContent = formatNum(step.value);
       metaBox.appendChild(valSpan);
 
       if (showPct) {
         var pctSpan = document.createElement('span');
-        pctSpan.style.cssText = [
-          'font-size:11px',
-          'color:#fff',
-          'background:' + color,
-          'border-radius:99px',
-          'padding:2px 7px',
-          'font-weight:600',
-          'letter-spacing:-.01em'
-        ].join(';');
+        pctSpan.style.cssText = 'font-size:11px;color:#fff;background:' + color + ';border-radius:99px;padding:2px 7px;font-weight:600;letter-spacing:-.01em';
         pctSpan.textContent = Math.round(pct * 100) + '%';
         metaBox.appendChild(pctSpan);
       }
@@ -188,39 +195,17 @@ looker.plugins.visualizations.add({
       rowEl.appendChild(label);
 
       var track = document.createElement('div');
-      track.style.cssText = [
-        'width:100%',
-        'height:' + rowH + 'px',
-        'background:' + bgColor,
-        'border-radius:6px',
-        'overflow:hidden',
-        'position:relative'
-      ].join(';');
+      track.style.cssText = 'width:100%;height:' + rowH + 'px;background:' + bgColor + ';border-radius:6px;overflow:hidden;position:relative';
 
       var fill = document.createElement('div');
       fill.className = 'fcs-bar-fill';
-      fill.style.cssText = [
-        'height:100%',
-        'width:' + barWidthPct + '%',
-        'background:' + color,
-        'border-radius:6px',
-        'animation-delay:' + (i * 80 + 200) + 'ms',
-        'clip-path:inset(0 100% 0 0)'
-      ].join(';');
+      fill.style.cssText = 'height:100%;width:' + barWidthPct + '%;background:' + color + ';border-radius:6px;animation-delay:' + (i * 80 + 200) + 'ms';
       track.appendChild(fill);
-
       rowEl.appendChild(track);
 
       if (showDrop && dropPct !== null && i > 0) {
         var dropEl = document.createElement('div');
-        dropEl.style.cssText = [
-          'text-align:right',
-          'font-size:11px',
-          'color:#e63946',
-          'margin-top:3px',
-          'padding-right:2px',
-          'font-weight:500'
-        ].join(';');
+        dropEl.style.cssText = 'text-align:right;font-size:11px;color:#e63946;margin-top:3px;padding-right:2px;font-weight:500';
         dropEl.textContent = '▼ ' + dropPct + '% de chute';
         rowEl.appendChild(dropEl);
       }
