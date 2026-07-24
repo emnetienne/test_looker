@@ -20,14 +20,16 @@ looker.plugins.visualizations.add({
           justify-content: center;
           font-family: Arial, sans-serif;
           box-sizing: border-box;
-          padding: 10px;
+          padding: 0; /* Removed padding to maximize space */
+          overflow: hidden;
         }
         .funnel-svg {
           width: 100%;
           height: 100%;
+          display: block;
         }
         .funnel-text-val {
-          font-size: 26px;
+          font-size: 28px;
           font-weight: bold;
         }
         .funnel-text-label {
@@ -87,8 +89,11 @@ looker.plugins.visualizations.add({
 
     // Dimensions for SVG rendering
     const width = 800;
-    const height = 500;
+    const height = 600;
+    
+    // Key Fix: Force SVG to stretch to 100% height and width without aspect ratio restrictions
     svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+    svg.setAttribute("preserveAspectRatio", "none");
 
     const colors = config.stageColors || [
       "#FF6B52",
@@ -99,19 +104,16 @@ looker.plugins.visualizations.add({
       "#FFF566"
     ];
 
-    // --- ADJUSTED LAYOUT PARAMETERS ---
-    const textRightX = 320;        // Position where text ends
-    const funnelLeftX = 350;       // Funnel starts closer to labels
-    const funnelRightX = 780;      // Funnel extends further to the right edge
+    const funnelLeftX = 380;
+    const funnelRightX = 760;
     const funnelTopWidth = funnelRightX - funnelLeftX;
-    const minBottomWidth = 40;     // Width at the tip of the funnel
+    const minBottomWidth = 30;
     const stageHeight = height / totalStages;
 
     stages.forEach((stage, index) => {
       const topY = index * stageHeight;
       const bottomY = (index + 1) * stageHeight;
 
-      // Calculate tapering width at top and bottom of this stage section
       const topTaper = index / totalStages;
       const bottomTaper = (index + 1) / totalStages;
 
@@ -139,17 +141,16 @@ looker.plugins.visualizations.add({
       polygon.setAttribute("fill", stageColor);
       svg.appendChild(polygon);
 
-      // Mid Y for annotations & lines
       const midY = topY + stageHeight / 2;
 
-      // 2. Dynamic Connector Line
+      // 2. Connector Line
       const line = document.createElementNS(
         "http://www.w3.org/2000/svg",
         "line"
       );
-      line.setAttribute("x1", textRightX + 10);
+      line.setAttribute("x1", "280");
       line.setAttribute("y1", midY);
-      line.setAttribute("x2", topX1 - 8);
+      line.setAttribute("x2", topX1 - 5);
       line.setAttribute("y2", midY);
       line.setAttribute("class", "connector-line");
       svg.appendChild(line);
@@ -159,8 +160,8 @@ looker.plugins.visualizations.add({
         "http://www.w3.org/2000/svg",
         "text"
       );
-      textVal.setAttribute("x", textRightX);
-      textVal.setAttribute("y", midY - 6);
+      textVal.setAttribute("x", "270");
+      textVal.setAttribute("y", midY - 8);
       textVal.setAttribute("text-anchor", "end");
       textVal.setAttribute("fill", stageColor);
       textVal.setAttribute("class", "funnel-text-val");
@@ -172,7 +173,7 @@ looker.plugins.visualizations.add({
         "http://www.w3.org/2000/svg",
         "text"
       );
-      textLabel.setAttribute("x", textRightX);
+      textLabel.setAttribute("x", "270");
       textLabel.setAttribute("y", midY + 14);
       textLabel.setAttribute("text-anchor", "end");
       textLabel.setAttribute("class", "funnel-text-label");
