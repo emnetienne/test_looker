@@ -1,5 +1,4 @@
 looker.plugins.visualizations.add({
-  // Default visualization configuration options shown in Looker UI
   options: {
     stageColors: {
       type: "array",
@@ -10,17 +9,26 @@ looker.plugins.visualizations.add({
   },
 
   create: function (element, config) {
+    // 1. Force Looker's root wrapper element to occupy 100% height and zero margin
+    element.style.height = "100%";
+    element.style.width = "100%";
+    element.style.padding = "0px";
+    element.style.margin = "0px";
+    element.style.display = "flex";
+    element.style.overflow = "hidden";
+
     element.innerHTML = `
       <style>
         .funnel-container {
           width: 100%;
           height: 100%;
           display: flex;
-          align-items: center;
-          justify-content: center;
+          align-items: stretch;
+          justify-content: stretch;
           font-family: Arial, sans-serif;
           box-sizing: border-box;
-          padding: 0; /* Removed padding to maximize space */
+          padding: 0;
+          margin: 0;
           overflow: hidden;
         }
         .funnel-svg {
@@ -58,13 +66,15 @@ looker.plugins.visualizations.add({
       return;
     }
 
+    // Ensure root element retains full height on data update
+    element.style.height = "100%";
+
     const svg = element.querySelector("#funnelSvg");
     svg.innerHTML = ""; // Clear existing render
 
     // Format data into stages array [{ label, value }, ...]
     let stages = [];
 
-    // Case 1: Data comes as multiple measure columns in a single row
     if (data.length === 1 && queryResponse.fields.measure_like.length > 1) {
       const row = data[0];
       queryResponse.fields.measure_like.forEach((field) => {
@@ -74,7 +84,6 @@ looker.plugins.visualizations.add({
         });
       });
     } else {
-      // Case 2: Data comes as rows (1 Dimension column, 1 Measure column)
       const dimKey = queryResponse.fields.dimension_like[0]?.name;
       const measureKey = queryResponse.fields.measure_like[0]?.name;
 
@@ -87,11 +96,11 @@ looker.plugins.visualizations.add({
     const totalStages = stages.length;
     if (totalStages === 0) return;
 
-    // Dimensions for SVG rendering
+    // Canvas coordinate space
     const width = 800;
     const height = 600;
     
-    // Key Fix: Force SVG to stretch to 100% height and width without aspect ratio restrictions
+    // Stretch SVG coordinates to fill 100% of tile vertical space
     svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
     svg.setAttribute("preserveAspectRatio", "none");
 
