@@ -20,15 +20,14 @@ looker.plugins.visualizations.add({
           justify-content: center;
           font-family: Arial, sans-serif;
           box-sizing: border-box;
-          padding: 20px;
+          padding: 10px;
         }
         .funnel-svg {
           width: 100%;
           height: 100%;
-          max-width: 800px;
         }
         .funnel-text-val {
-          font-size: 28px;
+          font-size: 26px;
           font-weight: bold;
         }
         .funnel-text-label {
@@ -88,7 +87,7 @@ looker.plugins.visualizations.add({
 
     // Dimensions for SVG rendering
     const width = 800;
-    const height = 600;
+    const height = 500;
     svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
 
     const colors = config.stageColors || [
@@ -100,10 +99,12 @@ looker.plugins.visualizations.add({
       "#FFF566"
     ];
 
-    const funnelLeftX = 380;
-    const funnelRightX = 760;
+    // --- ADJUSTED LAYOUT PARAMETERS ---
+    const textRightX = 320;        // Position where text ends
+    const funnelLeftX = 350;       // Funnel starts closer to labels
+    const funnelRightX = 780;      // Funnel extends further to the right edge
     const funnelTopWidth = funnelRightX - funnelLeftX;
-    const minBottomWidth = 30; // Min width at the tip of the funnel
+    const minBottomWidth = 40;     // Width at the tip of the funnel
     const stageHeight = height / totalStages;
 
     stages.forEach((stage, index) => {
@@ -141,14 +142,14 @@ looker.plugins.visualizations.add({
       // Mid Y for annotations & lines
       const midY = topY + stageHeight / 2;
 
-      // 2. Connector Line
+      // 2. Dynamic Connector Line
       const line = document.createElementNS(
         "http://www.w3.org/2000/svg",
         "line"
       );
-      line.setAttribute("x1", "280");
+      line.setAttribute("x1", textRightX + 10);
       line.setAttribute("y1", midY);
-      line.setAttribute("x2", topX1 - 5);
+      line.setAttribute("x2", topX1 - 8);
       line.setAttribute("y2", midY);
       line.setAttribute("class", "connector-line");
       svg.appendChild(line);
@@ -158,8 +159,8 @@ looker.plugins.visualizations.add({
         "http://www.w3.org/2000/svg",
         "text"
       );
-      textVal.setAttribute("x", "270");
-      textVal.setAttribute("y", midY - 8);
+      textVal.setAttribute("x", textRightX);
+      textVal.setAttribute("y", midY - 6);
       textVal.setAttribute("text-anchor", "end");
       textVal.setAttribute("fill", stageColor);
       textVal.setAttribute("class", "funnel-text-val");
@@ -171,7 +172,7 @@ looker.plugins.visualizations.add({
         "http://www.w3.org/2000/svg",
         "text"
       );
-      textLabel.setAttribute("x", "270");
+      textLabel.setAttribute("x", textRightX);
       textLabel.setAttribute("y", midY + 14);
       textLabel.setAttribute("text-anchor", "end");
       textLabel.setAttribute("class", "funnel-text-label");
