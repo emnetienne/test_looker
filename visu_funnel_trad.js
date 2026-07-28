@@ -65,6 +65,17 @@ looker.plugins.visualizations.add({
       return;
     }
 
+    // ------------------------------------------------------------------
+    //  RENOMMAGE CIBLÉ DES LIBELLÉS
+    //  Ne remplace QUE la valeur exacte indiquée ; tous les autres
+    //  libellés (et donc les autres usages de la viz) restent inchangés.
+    //  Pour ajouter d'autres renommages plus tard : ajoute une ligne ici.
+    // ------------------------------------------------------------------
+    const LABEL_OVERRIDES = {
+      "Nombre de clients trad": "Nombre de client acheteurs de produits animés"
+    };
+    const displayLabel = (lbl) => LABEL_OVERRIDES[(lbl || "").trim()] || lbl;
+
     const svg = element.querySelector("#funnelSvg");
     svg.innerHTML = ""; // Vider le SVG avant d'afficher les nouvelles données
 
@@ -173,12 +184,12 @@ looker.plugins.visualizations.add({
       textVal.textContent = Number(stage.value).toLocaleString();
       g.appendChild(textVal);
 
-      // 7. Texte du Libellé (Aligné sur la bande à droite)
+      // 7. Texte du Libellé (Aligné sur la bande à droite) — avec renommage ciblé
       const textLabel = document.createElementNS("http://www.w3.org/2000/svg", "text");
       textLabel.setAttribute("x", bannerRightX - 25);
       textLabel.setAttribute("y", midY);
       textLabel.setAttribute("class", "funnel-label-text");
-      textLabel.textContent = stage.label;
+      textLabel.textContent = displayLabel(stage.label);
       g.appendChild(textLabel);
 
       svg.appendChild(g);
