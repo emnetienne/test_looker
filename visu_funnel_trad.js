@@ -67,14 +67,28 @@ looker.plugins.visualizations.add({
 
     // ------------------------------------------------------------------
     //  RENOMMAGE CIBLÉ DES LIBELLÉS
-    //  Ne remplace QUE la valeur exacte indiquée ; tous les autres
-    //  libellés (et donc les autres usages de la viz) restent inchangés.
-    //  Pour ajouter d'autres renommages plus tard : ajoute une ligne ici.
+    //  On ne remplace QUE le(s) libellé(s) listé(s) ci-dessous ; tout le
+    //  reste (et donc les autres usages de la viz) est inchangé.
+    //  `match` doit être écrit en MINUSCULES (la comparaison est normalisée).
     // ------------------------------------------------------------------
-    const LABEL_OVERRIDES = {
-      "Nombre de clients trad": "Nombre de client acheteurs de produits animés"
+    const OVERRIDES = [
+      { match: "nombre de clients trad", to: "Nombre de client acheteurs de produits animés" }
+    ];
+
+    // Normalisation : minuscules, espaces insécables -> normaux, espaces multiples réduits, trim.
+    const norm = (s) => (s == null ? "" : String(s))
+      .replace(/\u00a0/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .toLowerCase();
+
+    const displayLabel = (lbl) => {
+      const n = norm(lbl);
+      for (const o of OVERRIDES) {
+        if (n === o.match || n.endsWith(o.match)) return o.to;
+      }
+      return lbl;
     };
-    const displayLabel = (lbl) => LABEL_OVERRIDES[(lbl || "").trim()] || lbl;
 
     const svg = element.querySelector("#funnelSvg");
     svg.innerHTML = ""; // Vider le SVG avant d'afficher les nouvelles données
