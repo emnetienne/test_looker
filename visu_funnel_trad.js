@@ -36,14 +36,14 @@ looker.plugins.visualizations.add({
         .funnel-value-text {
           font-size: 20px;
           font-weight: bold;
-          fill: #ffffff;
+          fill: #000000;
           text-anchor: middle;
           dominant-baseline: central;
         }
         .funnel-label-text {
           font-size: 16px;
           font-weight: bold;
-          fill: #ffffff;
+          fill: #000000;
           text-anchor: end;
           dominant-baseline: central;
         }
