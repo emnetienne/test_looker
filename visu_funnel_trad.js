@@ -65,29 +65,29 @@ looker.plugins.visualizations.add({
       return;
     }
 
-    // ------------------------------------------------------------------
+    // ==================================================================
     //  RENOMMAGE CIBLÉ DES LIBELLÉS
-    //  On ne remplace QUE le(s) libellé(s) listé(s) ci-dessous ; tout le
-    //  reste (et donc les autres usages de la viz) est inchangé.
-    //  `match` doit être écrit en MINUSCULES (la comparaison est normalisée).
-    // ------------------------------------------------------------------
-    const OVERRIDES = [
-      { match: "nombre de clients trad", to: "Nombre de client acheteurs de produits animés" }
+    //  On matche sur le NOM TECHNIQUE du champ (field.name, texte propre)
+    //  ET/OU sur le libellé. Si le contenu normalisé contient TOUS les
+    //  mots-clés d'une règle -> on affiche `to`. Les autres restent tels quels.
+    //  -> Ajoute simplement une entrée pour renommer une autre valeur.
+    // ==================================================================
+    const RENAME_RULES = [
+      { keywords: ["trad"], to: "Nombre de client acheteurs de produits animés" }
     ];
 
-    // Normalisation : minuscules, espaces insécables -> normaux, espaces multiples réduits, trim.
     const norm = (s) => (s == null ? "" : String(s))
       .replace(/\u00a0/g, " ")
       .replace(/\s+/g, " ")
       .trim()
       .toLowerCase();
 
-    const displayLabel = (lbl) => {
-      const n = norm(lbl);
-      for (const o of OVERRIDES) {
-        if (n === o.match || n.endsWith(o.match)) return o.to;
+    const displayLabel = (stage) => {
+      const hay = norm((stage.key || "") + " " + (stage.label || ""));
+      for (const r of RENAME_RULES) {
+        if (r.keywords.every((k) => hay.includes(norm(k)))) return r.to;
       }
-      return lbl;
+      return stage.label;
     };
 
     const svg = element.querySelector("#funnelSvg");
@@ -95,11 +95,12 @@ looker.plugins.visualizations.add({
 
     let stages = [];
 
-    // Formater les données
+    // Formater les données (on conserve `key` = nom technique du champ)
     if (data.length === 1 && queryResponse.fields.measure_like.length > 1) {
       const row = data[0];
       queryResponse.fields.measure_like.forEach((field) => {
         stages.push({
+          key: field.name,
           label: field.label_short || field.label,
           value: row[field.name]?.value || 0
         });
@@ -108,11 +109,21 @@ looker.plugins.visualizations.add({
       const dimKey = queryResponse.fields.dimension_like[0]?.name;
       const measureKey = queryResponse.fields.measure_like[0]?.name;
 
-      stages = data.map((row) => ({
-        label: dimKey ? row[dimKey]?.value : "Stage",
-        value: measureKey ? row[measureKey]?.value : 0
-      }));
+      stages = data.map((row) => {
+        const lbl = dimKey ? row[dimKey]?.value : "Stage";
+        return {
+          key: lbl,
+          label: lbl,
+          value: measureKey ? row[measureKey]?.value : 0
+        };
+      });
     }
+
+    // Diagnostic : ouvre la console du navigateur (F12) pour voir les vraies
+    // valeurs si un renommage ne se déclenche pas.
+    try {
+      console.log("[funnel] champs reçus:", stages.map((s) => ({ key: s.key, label: s.label })));
+    } catch (e) {}
 
     const totalStages = stages.length;
     if (totalStages === 0) return;
@@ -203,7 +214,7 @@ looker.plugins.visualizations.add({
       textLabel.setAttribute("x", bannerRightX - 25);
       textLabel.setAttribute("y", midY);
       textLabel.setAttribute("class", "funnel-label-text");
-      textLabel.textContent = displayLabel(stage.label);
+      textLabel.textContent = displayLabel(stage);
       g.appendChild(textLabel);
 
       svg.appendChild(g);
