@@ -6,15 +6,11 @@
  *    - Barres incrémentales corail  #EC6A4E
  *    - Barre "Total" périwinkle      #7C93D9
  *    - Libellés bleu marine          #1F2D4D
- *    - Titre centré souligné en pointillés
  *
- *  AJOUT : chaque barre affiche sa VALEUR **et son POURCENTAGE** du total.
+ *  Chaque barre affiche sa VALEUR et son POURCENTAGE du total.
+ *  Titre masqué par défaut (déjà présent sur la slide) — réactivable via l'option.
  *
  *  Données attendues : 1 dimension (segment) + 1 mesure (valeur).
- *  La barre "Total" est calculée automatiquement (= somme des barres).
- *
- *  Rendu en SVG mesuré au pixel + ResizeObserver => responsive et net à
- *  l'export PowerPoint. Conçu pour s'insérer comme UN élément du slide.
  * ============================================================================
  */
 
@@ -25,11 +21,11 @@ looker.plugins.visualizations.add({
   options: {
     title_text: {
       section: "Style", type: "string", label: "Titre",
-      default: "Répartition de shoppers par segment", order: 1
+      default: "", order: 1
     },
     show_title: {
       section: "Style", type: "boolean", label: "Afficher le titre",
-      default: true, order: 2
+      default: false, order: 2
     },
     card_style: {
       section: "Style", type: "string", label: "Fond", display: "select",
@@ -170,7 +166,7 @@ looker.plugins.visualizations.add({
 
     // Titre + style de carte
     this._card.className = "wf-card " + (config.card_style === "flat" ? "style-flat" : "style-card");
-    var showTitle = config.show_title !== false;
+    var showTitle = config.show_title === true && !!(config.title_text || "").trim();
     this._titleW.style.display = showTitle ? "" : "none";
     this._titleEl.textContent = config.title_text || "";
 
@@ -209,7 +205,7 @@ looker.plugins.visualizations.add({
     if (dMax === dMin) dMax = dMin + 1;
 
     // --- Marges & échelle ------------------------------------------------
-    var mTop = 26, mBottom = showLbl ? 52 : 16, mL = 12, mR = 12;
+    var mTop = 30, mBottom = showLbl ? 54 : 16, mL = 12, mR = 12;
     var plotTop = mTop, plotBottom = H - mBottom;
     var plotH = Math.max(10, plotBottom - plotTop);
     var n = segs.length;
@@ -218,6 +214,15 @@ looker.plugins.visualizations.add({
 
     function yScale(v) { return plotBottom - ((v - dMin) / (dMax - dMin)) * plotH; }
     function cx(i) { return mL + slot * (i + 0.5); }
+
+    // --- Tailles de police des KPI / % (agrandies) -----------------------
+    // Légèrement adaptatives à la largeur de barre pour rester lisibles,
+    // mais nettement plus grandes qu'avant.
+    var scale = Math.max(0.85, Math.min(1.25, barW / 130));
+    var VAL_IN   = Math.round(22 * scale);  // valeur, dans la barre
+    var PCT_IN   = Math.round(16 * scale);  // %, dans la barre
+    var VAL_UP   = Math.round(19 * scale);  // valeur, au-dessus (barre courte)
+    var PCT_UP   = Math.round(14 * scale);  // %, au-dessus
 
     // --- Helpers formatage FR -------------------------------------------
     var nfInt = new Intl.NumberFormat("fr-FR");
@@ -258,11 +263,14 @@ looker.plugins.visualizations.add({
 
     // connecteurs pointillés entre sommets cumulés
     for (var i = 0; i < n - 1; i++) {
-      var yLink = yScale(segs[i].total ? segs[i].end : segs[i].end);
+      var yLink = yScale(segs[i].end);
       var x1 = cx(i) + barW / 2, x2 = cx(i + 1) - barW / 2;
       svg += '<line x1="' + x1 + '" y1="' + yLink + '" x2="' + x2 + '" y2="' + yLink +
              '" stroke="#B9B5AC" stroke-width="1.4" stroke-dasharray="2 4"/>';
     }
+
+    // seuil de hauteur pour placer les libellés DANS la barre (ajusté aux polices)
+    var insideThreshold = VAL_IN + PCT_IN + 14;
 
     // barres + libellés
     for (var j = 0; j < n; j++) {
@@ -282,25 +290,27 @@ looker.plugins.visualizations.add({
       var pctTxt = showPct ? fmtPct(s.value) : "";
       if (valTxt || pctTxt) {
         var twoLines = valTxt && pctTxt;
-        if (h >= 40) {
-          var cyv = top + h / 2 + (twoLines ? -3 : 5);
+        if (h >= insideThreshold) {
+          var mid = top + h / 2;
           if (valTxt)
-            svg += '<text x="' + cxj + '" y="' + cyv + '" text-anchor="middle" ' +
-                   'font-weight="700" font-size="15" fill="' + INK + '">' + esc(valTxt) + '</text>';
+            svg += '<text x="' + cxj + '" y="' + (mid + (twoLines ? -PCT_IN * 0.55 : PCT_IN * 0.35)) +
+                   '" text-anchor="middle" font-weight="700" font-size="' + VAL_IN +
+                   '" fill="' + INK + '">' + esc(valTxt) + '</text>';
           if (pctTxt)
-            svg += '<text x="' + cxj + '" y="' + (top + h / 2 + 15) + '" text-anchor="middle" ' +
-                   'font-family="Inter" font-weight="600" font-size="11.5" fill="' + INK +
-                   '" opacity="0.72">' + esc(pctTxt) + '</text>';
+            svg += '<text x="' + cxj + '" y="' + (mid + VAL_IN * 0.62 + PCT_IN * 0.4) +
+                   '" text-anchor="middle" font-family="Inter" font-weight="600" font-size="' + PCT_IN +
+                   '" fill="' + INK + '" opacity="0.75">' + esc(pctTxt) + '</text>';
         } else {
           // barre trop courte : étiquettes AU-DESSUS
-          var yb = top - 6;
+          var yb = top - 8;
           if (pctTxt)
             svg += '<text x="' + cxj + '" y="' + yb + '" text-anchor="middle" ' +
-                   'font-family="Inter" font-weight="600" font-size="11" fill="' + INK +
-                   '" opacity="0.72">' + esc(pctTxt) + '</text>';
+                   'font-family="Inter" font-weight="600" font-size="' + PCT_UP +
+                   '" fill="' + INK + '" opacity="0.75">' + esc(pctTxt) + '</text>';
           if (valTxt)
-            svg += '<text x="' + cxj + '" y="' + (yb - (pctTxt ? 14 : 0)) + '" text-anchor="middle" ' +
-                   'font-weight="700" font-size="14" fill="' + INK + '">' + esc(valTxt) + '</text>';
+            svg += '<text x="' + cxj + '" y="' + (yb - (pctTxt ? PCT_UP + 4 : 0)) +
+                   '" text-anchor="middle" font-weight="700" font-size="' + VAL_UP +
+                   '" fill="' + INK + '">' + esc(valTxt) + '</text>';
         }
       }
 
