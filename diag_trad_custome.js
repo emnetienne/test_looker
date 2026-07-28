@@ -1,19 +1,17 @@
 /**
  * ============================================================================
- *  Cylindres 3D — Visualisation custom Looker
+ *  Barres (design "Paniers moyens") — Visualisation custom Looker
  * ----------------------------------------------------------------------------
- *  Diagramme en barres façon 3D (cylindres : ellipse claire en haut, base
- *  sombre), dans le style de l'entonnoir. La DERNIÈRE barre (la plus à droite)
- *  est détachée du groupe (espace + séparateur pointillé).
+ *  Barres plates, valeurs colorées au-dessus, axe en €, légende en bas,
+ *  et DERNIÈRE barre détachée du groupe (espace + séparateur pointillé foncé).
  *
  *  Entrée : plusieurs mesures (1 ligne) OU 1 dimension + 1 mesure.
- *  Valeurs affichées au-dessus des cylindres, légende en bas.
  * ============================================================================
  */
 
 looker.plugins.visualizations.add({
   id: "cylinder_bars",
-  label: "Cylindres 3D",
+  label: "Barres trad",
 
   options: {
     title_text: {
@@ -21,15 +19,18 @@ looker.plugins.visualizations.add({
     },
     bar_colors: {
       section: "Style", type: "string", label: "Couleurs (JSON array)", display: "text",
-      default: '["#3D50B5","#EC6A4E","#F5C869"]', order: 2
+      default: '["#3D50B5","#EC6A4E","#7DB249","#F5CE5E"]', order: 2
     },
     value_color_mode: {
       section: "Style", type: "string", label: "Couleur des valeurs", display: "select",
       values: [{ "Couleur de la barre": "bar" }, { "Foncé": "dark" }],
       default: "bar", order: 3
     },
+    bar_radius: {
+      section: "Style", type: "number", label: "Arrondi des barres (px)", default: 0, order: 4
+    },
     show_legend: {
-      section: "Style", type: "boolean", label: "Afficher la légende", default: true, order: 4
+      section: "Style", type: "boolean", label: "Afficher la légende", default: true, order: 5
     },
 
     separate_last: {
@@ -39,7 +40,7 @@ looker.plugins.visualizations.add({
       section: "Données", type: "string", label: "Symbole (vide = aucun)", default: "€", order: 2
     },
     decimals: {
-      section: "Données", type: "number", label: "Décimales des valeurs", default: 1, order: 3
+      section: "Données", type: "number", label: "Décimales des valeurs", default: 0, order: 3
     }
   },
 
@@ -51,13 +52,14 @@ looker.plugins.visualizations.add({
         box-sizing:border-box; padding:10px 12px; background:transparent;
         font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif; }
       .cb-root * { box-sizing:border-box; }
-      .cb-title { flex:0 0 auto; text-align:center; font-weight:700; color:#1F2D4D;
+      .cb-title { flex:0 0 auto; text-align:center; font-weight:600; color:#1F2D4D;
         font-size:20px; padding-bottom:8px; }
       .cb-chart { flex:1 1 auto; min-height:0; width:100%; }
-      .cb-legend { flex:0 0 auto; display:flex; flex-direction:column; gap:4px;
-        padding:8px 4px 2px; }
-      .cb-leg-item { display:flex; align-items:center; gap:8px; font-size:14px; color:#3a4245; }
-      .cb-dot { flex:0 0 auto; width:13px; height:13px; border-radius:50%; }
+      .cb-legend { flex:0 0 auto; display:flex; flex-wrap:wrap; gap:6px 22px;
+        padding:10px 4px 2px; }
+      .cb-leg-item { display:flex; align-items:flex-start; gap:8px; font-size:14px;
+        color:#3a4245; max-width:24%; min-width:150px; }
+      .cb-dot { flex:0 0 auto; width:13px; height:13px; border-radius:50%; margin-top:2px; }
       .cb-empty { flex:1 1 auto; display:flex; align-items:center; justify-content:center;
         color:#93A0B8; font-size:14px; }
     `;
@@ -129,7 +131,6 @@ looker.plugins.visualizations.add({
     var config = this._config || {};
     var bars = this._bars || [];
 
-    // Titre
     var title = (config.title_text || "").trim();
     this._titleEl.style.display = title ? "" : "none";
     this._titleEl.textContent = title;
@@ -140,21 +141,20 @@ looker.plugins.visualizations.add({
       return;
     }
 
-    // Options
     var colors;
     try { colors = JSON.parse(config.bar_colors || "[]"); } catch (e) { colors = []; }
-    if (!colors.length) colors = ["#3D50B5", "#EC6A4E", "#F5C869"];
+    if (!colors.length) colors = ["#3D50B5", "#EC6A4E", "#7DB249", "#F5CE5E"];
     var sym = config.currency_symbol != null ? config.currency_symbol : "€";
-    var dec = (config.decimals != null) ? Number(config.decimals) : 1;
+    var dec = (config.decimals != null) ? Number(config.decimals) : 0;
     var sepLast = config.separate_last !== false && bars.length >= 2;
     var valDark = config.value_color_mode === "dark";
+    var radius = Math.max(0, Number(config.bar_radius) || 0);
 
-    // --- Formatage FR ----------------------------------------------------
     function fmt(v, decimals) {
       var s = new Intl.NumberFormat("fr-FR", {
         minimumFractionDigits: decimals, maximumFractionDigits: decimals
       }).format(v);
-      return sym ? s + "\u00A0" + sym : s;
+      return sym ? s + sym : s;
     }
     function niceNum(range, round) {
       var exp = Math.floor(Math.log10(range || 1));
@@ -164,7 +164,6 @@ looker.plugins.visualizations.add({
       return nf * Math.pow(10, exp);
     }
 
-    // --- Dimensions ------------------------------------------------------
     var W = this._chart.clientWidth || 700;
     var H = this._chart.clientHeight || 360;
     if (W < 40 || H < 40) return;
@@ -173,29 +172,26 @@ looker.plugins.visualizations.add({
     if (!isFinite(maxVal) || maxVal <= 0) maxVal = 1;
 
     var axisFont = Math.max(10, Math.min(15, H * 0.035));
-    var valueFont = Math.max(12, Math.min(20, H * 0.05));
+    var valueFont = Math.max(13, Math.min(24, H * 0.06));
 
-    var mTop = valueFont + 14;   // place pour l'étiquette au-dessus des cylindres
-    var mBottom = 24;
-    var mLeft = Math.max(38, axisFont * 3.2); // place pour les libellés d'axe
+    var mTop = valueFont + 12;
+    var mBottom = 18;
+    var mLeft = Math.max(40, axisFont * 3.4);
     var mRight = 14;
     var plotTop = mTop, plotBottom = H - mBottom;
     var plotH = Math.max(10, plotBottom - plotTop);
     var plotLeft = mLeft, plotRight = W - mRight;
     var plotW = Math.max(10, plotRight - plotLeft);
 
-    // Échelle Y "propre"
-    var top = maxVal * 1.12;
+    var top = maxVal * 1.15;
     var step = niceNum(top / 4, true);
     var niceMax = Math.ceil(top / step) * step;
     function yScale(v) { return plotBottom - (v / niceMax) * plotH; }
 
-    // --- Disposition en X (dernière barre détachée) ----------------------
     var n = bars.length;
-    var sepExtra = sepLast ? 0.7 : 0;                 // espace en + avant la dernière
+    var sepExtra = sepLast ? 0.7 : 0;
     var unit = plotW / (n + sepExtra);
-    var barW = Math.min(unit * 0.52, 0.16 * W);
-    var ry = barW * 0.18;                             // perspective des ellipses
+    var barW = Math.min(unit * 0.5, 0.16 * W);
 
     var centers = [];
     var x = plotLeft + unit * 0.5;
@@ -205,8 +201,8 @@ looker.plugins.visualizations.add({
       x += unit;
     }
 
-    // --- SVG -------------------------------------------------------------
     var INK = "#1F2D4D";
+    var baseline = yScale(0);
     var svg = '<svg width="100%" height="100%" viewBox="0 0 ' + W + ' ' + H +
       '" preserveAspectRatio="xMidYMid meet">';
 
@@ -214,42 +210,32 @@ looker.plugins.visualizations.add({
     for (var t = 0; t <= niceMax + 1e-9; t += step) {
       var gy = yScale(t);
       svg += '<line x1="' + plotLeft + '" y1="' + gy + '" x2="' + plotRight + '" y2="' + gy +
-        '" stroke="#E4E1D9" stroke-width="1"/>';
+        '" stroke="#E7E4DD" stroke-width="1"/>';
       svg += '<text x="' + (plotLeft - 8) + '" y="' + (gy + axisFont * 0.35) +
         '" text-anchor="end" font-size="' + axisFont + '" fill="#7A8699">' +
         fmt(t, 0) + '</text>';
     }
 
-    // Séparateur pointillé avant la dernière barre
+    // Séparateur pointillé foncé avant la dernière barre
     if (sepLast) {
       var sepX = (centers[n - 2] + barW / 2 + centers[n - 1] - barW / 2) / 2;
-      svg += '<line x1="' + sepX + '" y1="' + plotTop + '" x2="' + sepX + '" y2="' + plotBottom +
-        '" stroke="#C7C2B8" stroke-width="1.4" stroke-dasharray="3 5"/>';
+      svg += '<line x1="' + sepX + '" y1="' + (plotTop - 6) + '" x2="' + sepX + '" y2="' + (baseline + 6) +
+        '" stroke="#33415C" stroke-width="2.2" stroke-linecap="round" stroke-dasharray="0.5 8"/>';
     }
 
-    // Cylindres 3D
-    var baseline = yScale(0);
+    // Barres plates
     for (var b = 0; b < n; b++) {
       var bar = bars[b];
       var color = colors[b % colors.length];
       var cx = centers[b];
       var yTop = yScale(bar.value);
-      var rx = barW / 2;
-      var bodyH = Math.max(0, baseline - yTop);
+      var bodyH = Math.max(1, baseline - yTop);
 
-      // Corps
-      svg += '<rect x="' + (cx - rx) + '" y="' + yTop + '" width="' + (2 * rx) +
-        '" height="' + bodyH + '" fill="' + color + '"/>';
-      // Base sombre (ellipse du bas)
-      svg += '<ellipse cx="' + cx + '" cy="' + baseline + '" rx="' + rx + '" ry="' + ry +
-        '" fill="' + color + '" style="filter:brightness(0.82)"/>';
-      // Dessus clair (ellipse du haut)
-      svg += '<ellipse cx="' + cx + '" cy="' + yTop + '" rx="' + rx + '" ry="' + ry +
-        '" fill="' + color + '" style="filter:brightness(1.15)"/>';
+      svg += '<rect x="' + (cx - barW / 2) + '" y="' + yTop + '" width="' + barW +
+        '" height="' + bodyH + '" rx="' + radius + '" fill="' + color + '"/>';
 
-      // Valeur au-dessus
       var valTxt = (bar.rendered != null && bar.rendered !== "") ? bar.rendered : fmt(bar.value, dec);
-      svg += '<text x="' + cx + '" y="' + (yTop - ry - 6) + '" text-anchor="middle" font-weight="700" ' +
+      svg += '<text x="' + cx + '" y="' + (yTop - 10) + '" text-anchor="middle" font-weight="700" ' +
         'font-size="' + valueFont + '" fill="' + (valDark ? INK : color) + '">' +
         escapeHtml(valTxt) + '</text>';
     }
@@ -260,7 +246,7 @@ looker.plugins.visualizations.add({
     svg += "</svg>";
     this._chart.innerHTML = svg;
 
-    // --- Légende (HTML, se met en forme et retourne à la ligne seule) ----
+    // Légende
     if (config.show_legend !== false) {
       this._legend.style.display = "";
       var html = "";
