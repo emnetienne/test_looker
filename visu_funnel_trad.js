@@ -42,7 +42,7 @@ looker.plugins.visualizations.add({
         .funnel-label-text {
           font-weight: bold;
           fill: #ffffff;
-          text-anchor: end;
+          text-anchor: middle;
           dominant-baseline: central;
         }
       </style>
@@ -77,10 +77,7 @@ looker.plugins.visualizations.add({
     }
 
     // ==================================================================
-    //  RENOMMAGE CIBLÉ DES LIBELLÉS
-    //  On matche sur le NOM TECHNIQUE du champ (field.name, texte propre)
-    //  ET/OU sur le libellé. Si le contenu normalisé contient TOUS les
-    //  mots-clés d'une règle -> on affiche `to`. Les autres restent tels quels.
+    //  RENOMMAGE CIBLÉ DES LIBELLÉS (matching sur le nom technique + libellé)
     // ==================================================================
     const RENAME_RULES = [
       { keywords: ["trad"], to: "Nombre de client acheteurs de produits animés" }
@@ -126,12 +123,10 @@ looker.plugins.visualizations.add({
       });
     }
 
-    // Diagnostic : ouvre la console (F12) si un renommage ne se déclenche pas.
     try {
       console.log("[funnel] champs reçus:", stages.map((s) => ({ key: s.key, label: s.label })));
     } catch (e) {}
 
-    // On mémorise l'état pour pouvoir re-render au redimensionnement
     this._stages = stages;
     this._config = config;
     this._displayLabel = displayLabel;
@@ -141,8 +136,8 @@ looker.plugins.visualizations.add({
   },
 
   /* ------------------------------------------------------------------------ */
-  /*  Dessin proportionnel — remplit la tuile en HAUTEUR ET en LARGEUR         */
-  /*  Appelé par updateAsync ET par le ResizeObserver                          */
+  /*  Dessin proportionnel — remplit la tuile, sans texte qui chevauche,       */
+  /*  sans bas coupé. Libellés multi-lignes dans la partie droite.             */
   /* ------------------------------------------------------------------------ */
   _draw: function () {
     const stages = this._stages || [];
@@ -153,6 +148,7 @@ looker.plugins.visualizations.add({
     if (!svg || !stages.length) return;
 
     svg.innerHTML = "";
+    const SVGNS = "http://www.w3.org/2000/svg";
 
     const totalStages = stages.length;
     if (totalStages === 0) return;
@@ -162,83 +158,101 @@ looker.plugins.visualizations.add({
     const H = element.clientHeight || 650;
     if (W < 20 || H < 20) return;
 
-    // Le viewBox = pixels exacts -> aucune bande vide, on remplit tout.
     svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
     svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
 
     const defaultColors = ["#5D8EC2", "#2B5278", "#4A154B", "#6B0D38", "#3B1E08"];
     const colors = config.stageColors && config.stageColors.length > 0 ? config.stageColors : defaultColors;
 
-    // --- Géométrie EN PROPORTION de la tuile -----------------------------
-    // (mêmes ratios que le design d'origine 1000x650)
-    const funnelCenterX  = 0.32 * W;   // centre horizontal de l'entonnoir
+    // --- Géométrie horizontale (en proportion de la largeur) -------------
+    const funnelCenterX  = 0.32 * W;   // centre de l'entonnoir
     const maxTopWidth    = 0.26 * W;   // demi-largeur du haut
     const minBottomWidth = 0.06 * W;   // demi-largeur du bas
-    const bannerRightX   = 0.98 * W;   // fin de la bande de texte à droite
-    const labelPad       = 0.025 * W;  // marge droite du libellé
+    const bannerRightX   = 0.99 * W;   // fin de la bande de texte à droite
 
-    const stageHeight = H / (totalStages + 0.3);         // hauteur par segment
-    const ry = Math.min(0.034 * H, stageHeight * 0.4);   // perspective 3D (ellipse)
+    // --- Géométrie verticale : on réserve des marges pour que TOUT tienne
+    //     (y compris l'ellipse du bas) -> plus de bas coupé. ----------------
+    const pad = Math.max(6, 0.02 * H);
+    let ry = 0.028 * H;
+    let stageHeight = (H - 2 * ry - 2 * pad) / totalStages;
+    if (stageHeight < 12) { stageHeight = (H - 2 * pad) / totalStages; ry = stageHeight * 0.30; }
+    ry = Math.min(ry, stageHeight * 0.38);
+    const y0 = pad + ry; // sommet de la 1re bande (haut de l'ellipse = pad)
 
     // Tailles de texte proportionnelles à la hauteur
-    const valueFont = Math.max(11, 20 * (H / 650));
-    const labelFont = Math.max(9, 16 * (H / 650));
+    const valueFont = Math.max(11, Math.min(0.42 * stageHeight, 20 * (H / 650)));
+    const labelFont = Math.max(9,  Math.min(0.30 * stageHeight, 16 * (H / 650)));
+
+    // --- Zone réservée aux LIBELLÉS : à droite du bord le plus large du cône
+    //     (=> le texte ne chevauche jamais l'entonnoir) --------------------
+    const labelLeft   = funnelCenterX + maxTopWidth + 0.03 * W;
+    const labelRight  = bannerRightX - 0.02 * W;
+    const labelCenterX = (labelLeft + labelRight) / 2;
+    const maxTextW    = Math.max(60, labelRight - labelLeft);
+    const maxChars    = Math.max(6, Math.floor(maxTextW / (0.58 * labelFont)));
+    const lineH       = labelFont * 1.18;
+
+    function wrapText(text, maxCh) {
+      const words = String(text).split(/\s+/);
+      const lines = [];
+      let cur = "";
+      for (let i = 0; i < words.length; i++) {
+        const t = cur ? cur + " " + words[i] : words[i];
+        if (t.length > maxCh && cur) { lines.push(cur); cur = words[i]; }
+        else cur = t;
+      }
+      if (cur) lines.push(cur);
+      return lines;
+    }
 
     // Dessiner de bas en haut pour un chevauchement 3D parfait
     for (let i = totalStages - 1; i >= 0; i--) {
       const stage = stages[i];
       const stageColor = colors[i % colors.length];
 
-      // Tapering (réduction progressive de la largeur)
       const topTaper = i / totalStages;
       const bottomTaper = (i + 1) / totalStages;
-
       const topRx = maxTopWidth - topTaper * (maxTopWidth - minBottomWidth);
       const bottomRx = maxTopWidth - bottomTaper * (maxTopWidth - minBottomWidth);
 
-      const topY = i * stageHeight + ry;
-      const bottomY = (i + 1) * stageHeight + ry;
+      const topY = y0 + i * stageHeight;
+      const bottomY = y0 + (i + 1) * stageHeight;
 
-      const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+      const g = document.createElementNS(SVGNS, "g");
 
-      // Bande rectangulaire à droite (arrière-plan du libellé)
-      const banner = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
-      const bannerPoints = `${funnelCenterX},${topY} ${bannerRightX},${topY} ${bannerRightX},${bottomY} ${funnelCenterX},${bottomY}`;
-      banner.setAttribute("points", bannerPoints);
+      // Bande rectangulaire à droite (fond du libellé)
+      const banner = document.createElementNS(SVGNS, "polygon");
+      banner.setAttribute("points",
+        `${funnelCenterX},${topY} ${bannerRightX},${topY} ${bannerRightX},${bottomY} ${funnelCenterX},${bottomY}`);
       banner.setAttribute("fill", stageColor);
       banner.setAttribute("opacity", "0.95");
       g.appendChild(banner);
 
-      // Trapeze principal (corps du segment conique)
-      const cone = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
-      const conePoints = `${funnelCenterX - topRx},${topY} ${funnelCenterX + topRx},${topY} ${funnelCenterX + bottomRx},${bottomY} ${funnelCenterX - bottomRx},${bottomY}`;
-      cone.setAttribute("points", conePoints);
+      // Trapèze principal (corps conique)
+      const cone = document.createElementNS(SVGNS, "polygon");
+      cone.setAttribute("points",
+        `${funnelCenterX - topRx},${topY} ${funnelCenterX + topRx},${topY} ${funnelCenterX + bottomRx},${bottomY} ${funnelCenterX - bottomRx},${bottomY}`);
       cone.setAttribute("fill", stageColor);
       g.appendChild(cone);
 
-      // Ellipse de base (bas du segment)
-      const bottomEllipse = document.createElementNS("http://www.w3.org/2000/svg", "ellipse");
-      bottomEllipse.setAttribute("cx", funnelCenterX);
-      bottomEllipse.setAttribute("cy", bottomY);
-      bottomEllipse.setAttribute("rx", bottomRx);
-      bottomEllipse.setAttribute("ry", ry);
-      bottomEllipse.setAttribute("fill", stageColor);
-      bottomEllipse.setAttribute("filter", "brightness(0.85)");
-      g.appendChild(bottomEllipse);
+      // Ellipse de base
+      const be = document.createElementNS(SVGNS, "ellipse");
+      be.setAttribute("cx", funnelCenterX); be.setAttribute("cy", bottomY);
+      be.setAttribute("rx", bottomRx); be.setAttribute("ry", ry);
+      be.setAttribute("fill", stageColor); be.setAttribute("filter", "brightness(0.85)");
+      g.appendChild(be);
 
-      // Ellipse supérieure (ouverture 3D)
-      const topEllipse = document.createElementNS("http://www.w3.org/2000/svg", "ellipse");
-      topEllipse.setAttribute("cx", funnelCenterX);
-      topEllipse.setAttribute("cy", topY);
-      topEllipse.setAttribute("rx", topRx);
-      topEllipse.setAttribute("ry", ry);
-      topEllipse.setAttribute("fill", stageColor);
-      topEllipse.setAttribute("filter", "brightness(1.15)");
-      g.appendChild(topEllipse);
+      // Ellipse supérieure
+      const te = document.createElementNS(SVGNS, "ellipse");
+      te.setAttribute("cx", funnelCenterX); te.setAttribute("cy", topY);
+      te.setAttribute("rx", topRx); te.setAttribute("ry", ry);
+      te.setAttribute("fill", stageColor); te.setAttribute("filter", "brightness(1.15)");
+      g.appendChild(te);
 
-      // Texte de la valeur (centré dans le funnel)
       const midY = (topY + bottomY) / 2;
-      const textVal = document.createElementNS("http://www.w3.org/2000/svg", "text");
+
+      // Valeur (centrée dans le cône)
+      const textVal = document.createElementNS(SVGNS, "text");
       textVal.setAttribute("x", funnelCenterX);
       textVal.setAttribute("y", midY);
       textVal.setAttribute("class", "funnel-value-text");
@@ -246,14 +260,18 @@ looker.plugins.visualizations.add({
       textVal.textContent = Number(stage.value).toLocaleString();
       g.appendChild(textVal);
 
-      // Texte du libellé (aligné sur la bande à droite) — avec renommage ciblé
-      const textLabel = document.createElementNS("http://www.w3.org/2000/svg", "text");
-      textLabel.setAttribute("x", bannerRightX - labelPad);
-      textLabel.setAttribute("y", midY);
-      textLabel.setAttribute("class", "funnel-label-text");
-      textLabel.style.fontSize = labelFont + "px";
-      textLabel.textContent = displayLabel(stage);
-      g.appendChild(textLabel);
+      // Libellé multi-lignes, dans la zone réservée à droite (jamais sur le cône)
+      const lines = wrapText(displayLabel(stage), maxChars);
+      const startY = midY - ((lines.length - 1) / 2) * lineH;
+      for (let k = 0; k < lines.length; k++) {
+        const tl = document.createElementNS(SVGNS, "text");
+        tl.setAttribute("x", labelCenterX);
+        tl.setAttribute("y", startY + k * lineH);
+        tl.setAttribute("class", "funnel-label-text");
+        tl.style.fontSize = labelFont + "px";
+        tl.textContent = lines[k];
+        g.appendChild(tl);
+      }
 
       svg.appendChild(g);
     }
