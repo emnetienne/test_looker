@@ -11,9 +11,36 @@ looker.plugins.visualizations.add({
       type: "string", label: "Texte alternatif",
       default: "Image", section: "Image", order: 2
     },
+    objectFit: {
+      type: "string", display: "select", label: "Ajustement",
+      default: "contain", section: "Style", order: 1,
+      values: [
+        { "Ajuster sans rogner (contain)": "contain" },
+        { "Remplir en rognant (cover)": "cover" },
+        { "Étirer (fill)": "fill" }
+      ]
+    },
+    hAlign: {
+      type: "string", display: "select", label: "Alignement horizontal",
+      default: "center", section: "Style", order: 2,
+      values: [
+        { "Gauche": "left" },
+        { "Centre": "center" },
+        { "Droite": "right" }
+      ]
+    },
+    vAlign: {
+      type: "string", display: "select", label: "Alignement vertical",
+      default: "top", section: "Style", order: 3,
+      values: [
+        { "Haut": "top" },
+        { "Centre": "center" },
+        { "Bas": "bottom" }
+      ]
+    },
     padding: {
       type: "number", label: "Marge intérieure (px)",
-      default: 0, section: "Style", order: 1
+      default: 0, section: "Style", order: 4
     }
   },
 
@@ -21,14 +48,12 @@ looker.plugins.visualizations.add({
     element.innerHTML = `
       <style>
         .si-wrap { box-sizing: border-box; width: 100%; height: 100%;
-          display: flex; align-items: center; justify-content: center;
           overflow: hidden; background: transparent; }
-        .si-img { max-width: 100%; max-height: 100%; width: auto; height: auto;
-          object-fit: contain; display: block; }
+        .si-img { width: 100%; height: 100%; display: block; }
         .si-empty { font-family: Arial, Helvetica, sans-serif; font-size: 13px;
           color: #6b6b6b; text-align: center; padding: 16px; }
       </style>
-      <div class="si-wrap"><div class="si-content"></div></div>
+      <div class="si-wrap"><div class="si-content" style="width:100%;height:100%"></div></div>
     `;
     this._wrap = element.querySelector(".si-wrap");
     this._content = element.querySelector(".si-content");
@@ -40,6 +65,9 @@ looker.plugins.visualizations.add({
     var url = config.imageUrl || "";
     var alt = (config.altText != null && config.altText !== "") ? config.altText : "Image";
     var pad = (typeof config.padding === "number" && config.padding >= 0) ? config.padding : 0;
+    var fit = config.objectFit || "contain";
+    var h = config.hAlign || "center";
+    var v = config.vAlign || "top";
 
     this._wrap.style.padding = pad + "px";
 
@@ -55,7 +83,8 @@ looker.plugins.visualizations.add({
       return;
     }
 
-    this._content.innerHTML = '<img class="si-img" src="' + esc(url) + '" alt="' + esc(alt) + '" />';
+    var style = "object-fit:" + esc(fit) + ";object-position:" + esc(h) + " " + esc(v) + ";";
+    this._content.innerHTML = '<img class="si-img" style="' + style + '" src="' + esc(url) + '" alt="' + esc(alt) + '" />';
 
     var img = this._content.querySelector(".si-img");
     var self = this;
