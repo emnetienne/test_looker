@@ -1,6 +1,6 @@
 looker.plugins.visualizations.add({
-  id: "funnel_left",
-  label: "Funnel (gauche)",
+  id: "funnel_mirror",
+  label: "Funnel (miroir)",
   options: {
     stageColors: {
       type: "array",
@@ -115,7 +115,7 @@ looker.plugins.visualizations.add({
   },
 
   /* ------------------------------------------------------------------------ */
-  /*  GAUCHE : entonnoir à GAUCHE, bandes/libellés vers la DROITE              */
+  /*  MIROIR : entonnoir à DROITE, bandes/libellés vers la GAUCHE              */
   /* ------------------------------------------------------------------------ */
   _draw: function () {
     const stages = this._stages || [];
@@ -141,11 +141,11 @@ looker.plugins.visualizations.add({
     const defaultColors = ["#5D8EC2", "#2B5278", "#4A154B", "#6B0D38", "#3B1E08"];
     const colors = config.stageColors && config.stageColors.length > 0 ? config.stageColors : defaultColors;
 
-    // --- Géométrie horizontale GAUCHE ------------------------------------
-    const funnelCenterX  = 0.32 * W;   // entonnoir à GAUCHE
+    // --- Géométrie horizontale MIROIR ------------------------------------
+    const funnelCenterX  = 0.68 * W;   // entonnoir à DROITE (miroir de 0.32)
     const maxTopWidth    = 0.26 * W;
     const minBottomWidth = 0.06 * W;
-    const bannerRightX   = 0.99 * W;   // la bande s'étend vers la DROITE
+    const bannerLeftX    = 0.01 * W;   // la bande s'étend vers la GAUCHE
 
     // --- Géométrie verticale (marges pour ne rien couper) ----------------
     const pad = Math.max(6, 0.02 * H);
@@ -164,9 +164,9 @@ looker.plugins.visualizations.add({
     const valueFont = Math.max(11, Math.min(0.42 * stageHeight, 20 * (H / 650)));
     const labelFont = Math.max(8,  Math.min(0.26 * stageHeight, 14 * (H / 650)));
 
-    // Zone des libellés : à DROITE du bord le plus large du cône
-    const labelLeft    = funnelCenterX + maxTopWidth + 0.03 * W;
-    const labelRight   = bannerRightX - 0.02 * W;
+    // Zone des libellés : à GAUCHE du bord le plus large du cône
+    const labelRight   = funnelCenterX - maxTopWidth - 0.03 * W;
+    const labelLeft    = bannerLeftX + 0.02 * W;
     const labelCenterX = (labelLeft + labelRight) / 2;
     const maxTextW     = Math.max(60, labelRight - labelLeft);
     const maxChars     = Math.max(6, Math.floor(maxTextW / (0.58 * labelFont)));
@@ -203,10 +203,10 @@ looker.plugins.visualizations.add({
 
       const g = document.createElementNS(SVGNS, "g");
 
-      // Bande (fond du libellé) — s'étend vers la DROITE
+      // Bande (fond du libellé) — s'étend vers la GAUCHE
       const banner = document.createElementNS(SVGNS, "polygon");
       banner.setAttribute("points",
-        `${funnelCenterX},${topY} ${bannerRightX},${topY} ${bannerRightX},${bottomY} ${funnelCenterX},${bottomY}`);
+        `${funnelCenterX},${topY} ${bannerLeftX},${topY} ${bannerLeftX},${bottomY} ${funnelCenterX},${bottomY}`);
       banner.setAttribute("fill", stageColor);
       banner.setAttribute("opacity", "0.95");
       g.appendChild(banner);
@@ -234,7 +234,7 @@ looker.plugins.visualizations.add({
 
       const midY = (topY + bottomY) / 2;
 
-      // Valeur (centrée dans le cône, à gauche)
+      // Valeur (centrée dans le cône, à droite)
       const textVal = document.createElementNS(SVGNS, "text");
       textVal.setAttribute("x", funnelCenterX);
       textVal.setAttribute("y", midY);
@@ -243,7 +243,7 @@ looker.plugins.visualizations.add({
       textVal.textContent = Number(stage.value).toLocaleString();
       g.appendChild(textVal);
 
-      // Libellé multi-lignes, dans la zone droite (jamais sur le cône)
+      // Libellé multi-lignes, dans la zone gauche (jamais sur le cône)
       const lines = wrapText(displayLabel(stage), maxChars);
       const startY = midY - ((lines.length - 1) / 2) * lineH;
       for (let k = 0; k < lines.length; k++) {
