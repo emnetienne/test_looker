@@ -155,8 +155,14 @@ looker.plugins.visualizations.add({
     ry = Math.min(ry, stageHeight * 0.38);
     const y0 = pad + ry;
 
+    // Aplatissement des ellipses étroites : évite que la pointe du cône
+    // (petit rayon horizontal) ne devienne une bille ronde. Les ellipses
+    // larges (rx grand) ne sont pas affectées par ce min().
+    const ELLIPSE_FLATNESS = 0.5;
+    const capRy = (rx) => Math.min(ry, rx * ELLIPSE_FLATNESS);
+
     const valueFont = Math.max(11, Math.min(0.42 * stageHeight, 20 * (H / 650)));
-    const labelFont = Math.max(9,  Math.min(0.30 * stageHeight, 16 * (H / 650)));
+    const labelFont = Math.max(8,  Math.min(0.26 * stageHeight, 14 * (H / 650)));
 
     // Zone des libellés : à GAUCHE du bord le plus large du cône
     const labelRight   = funnelCenterX - maxTopWidth - 0.03 * W;
@@ -188,6 +194,10 @@ looker.plugins.visualizations.add({
       const topRx = maxTopWidth - topTaper * (maxTopWidth - minBottomWidth);
       const bottomRx = maxTopWidth - bottomTaper * (maxTopWidth - minBottomWidth);
 
+      // Rayons verticaux aplatis en fonction du rayon horizontal local
+      const topRy = capRy(topRx);
+      const bottomRy = capRy(bottomRx);
+
       const topY = y0 + i * stageHeight;
       const bottomY = y0 + (i + 1) * stageHeight;
 
@@ -211,14 +221,14 @@ looker.plugins.visualizations.add({
       // Ellipse de base
       const be = document.createElementNS(SVGNS, "ellipse");
       be.setAttribute("cx", funnelCenterX); be.setAttribute("cy", bottomY);
-      be.setAttribute("rx", bottomRx); be.setAttribute("ry", ry);
+      be.setAttribute("rx", bottomRx); be.setAttribute("ry", bottomRy);
       be.setAttribute("fill", stageColor); be.setAttribute("filter", "brightness(0.85)");
       g.appendChild(be);
 
       // Ellipse supérieure
       const te = document.createElementNS(SVGNS, "ellipse");
       te.setAttribute("cx", funnelCenterX); te.setAttribute("cy", topY);
-      te.setAttribute("rx", topRx); te.setAttribute("ry", ry);
+      te.setAttribute("rx", topRx); te.setAttribute("ry", topRy);
       te.setAttribute("fill", stageColor); te.setAttribute("filter", "brightness(1.15)");
       g.appendChild(te);
 
