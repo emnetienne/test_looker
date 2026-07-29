@@ -6,18 +6,6 @@ looker.plugins.visualizations.add({
       type: "string", display: "color", label: "Couleur ticket",
       default: "#0F6E56", section: "Style", order: 1
     },
-    highlightColor: {
-      type: "string", display: "color", label: "Couleur lot principal",
-      default: "#BA7517", section: "Style", order: 2
-    },
-    showSummary: {
-      type: "boolean", label: "Afficher la synthèse",
-      default: true, section: "Style", order: 3
-    },
-    highlightTop: {
-      type: "boolean", label: "Mettre en avant le plus gros bon",
-      default: true, section: "Style", order: 4
-    },
     currency: {
       type: "string", label: "Symbole monétaire",
       default: "€", section: "Valeur", order: 1
@@ -28,16 +16,12 @@ looker.plugins.visualizations.add({
     element.innerHTML = `
       <style>
         .vt-wrap { box-sizing: border-box; width: 100%; height: 100%; overflow: auto;
-          font-family: Arial, Helvetica, sans-serif; color: #2b2b2b; padding: 16px; }
-        .vt-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-          gap: 12px; margin-bottom: 20px; }
-        .vt-metric { background: #f4f3ef; border-radius: 8px; padding: 14px 16px; }
-        .vt-metric-label { font-size: 13px; color: #6b6b6b; margin-bottom: 6px; }
-        .vt-metric-value { font-size: 24px; font-weight: bold; color: #2b2b2b; line-height: 1.1; }
+          display: flex; align-items: center;
+          font-family: Arial, Helvetica, sans-serif; color: #2b2b2b; padding: 8px 16px; }
+        .vt-content { width: 100%; }
         .vt-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 16px; }
         .vt-ticket { display: flex; background: #ffffff; border: 1px solid #e3e2dc;
-          border-radius: 12px; overflow: hidden; min-height: 92px; position: relative; }
-        .vt-ticket.vt-top { border: 2px solid; }
+          border-radius: 12px; overflow: hidden; min-height: 92px; }
         .vt-panel { display: flex; flex-direction: column; align-items: center; justify-content: center;
           padding: 16px 14px; min-width: 82px; color: #ffffff; }
         .vt-panel-amount { font-size: 22px; font-weight: bold; line-height: 1.1; text-align: center; }
@@ -48,8 +32,6 @@ looker.plugins.visualizations.add({
         .vt-total { font-size: 13px; color: #6b6b6b; margin-top: 10px; padding-top: 10px;
           border-top: 1px solid #eeede8; }
         .vt-total strong { color: #2b2b2b; font-weight: bold; }
-        .vt-badge { position: absolute; top: 8px; right: 8px; font-size: 11px;
-          padding: 3px 8px; border-radius: 6px; color: #ffffff; }
       </style>
       <div class="vt-wrap"><div class="vt-content"></div></div>
     `;
@@ -73,7 +55,6 @@ looker.plugins.visualizations.add({
     var measKey = meas[0].name;
     var currency = (config.currency != null && config.currency !== "") ? config.currency : "€";
     var ticketColor = config.ticketColor || "#0F6E56";
-    var highlightColor = config.highlightColor || "#BA7517";
 
     function esc(s) {
       return String(s == null ? "" : s)
@@ -103,47 +84,11 @@ looker.plugins.visualizations.add({
       return { label: label, count: count, amount: amount };
     });
 
-    var totalCount = rows.reduce(function (a, r) { return a + r.count; }, 0);
-    var totalValue = 0, hasValue = false;
+    var html = '<div class="vt-grid">';
     rows.forEach(function (r) {
-      if (r.amount != null) { totalValue += r.amount * r.count; hasValue = true; }
-    });
-
-    var topIndex = -1;
-    if (config.highlightTop !== false) {
-      var maxAmt = -Infinity;
-      rows.forEach(function (r, i) {
-        if (r.amount != null && r.amount > maxAmt) { maxAmt = r.amount; topIndex = i; }
-      });
-    }
-
-    var html = "";
-
-    if (config.showSummary !== false) {
-      html += '<div class="vt-summary">';
-      html += '<div class="vt-metric"><div class="vt-metric-label">Bons distribués</div>' +
-              '<div class="vt-metric-value">' + fmt(totalCount) + '</div></div>';
-      if (hasValue) {
-        html += '<div class="vt-metric"><div class="vt-metric-label">Valeur totale distribuée</div>' +
-                '<div class="vt-metric-value">' + fmt(totalValue) + ' ' + esc(currency) + '</div></div>';
-      }
-      html += '<div class="vt-metric"><div class="vt-metric-label">Paliers de gain</div>' +
-              '<div class="vt-metric-value">' + fmt(rows.length) + '</div></div>';
-      html += '</div>';
-    }
-
-    html += '<div class="vt-grid">';
-    rows.forEach(function (r, i) {
-      var isTop = (i === topIndex);
-      var panelBg = isTop ? highlightColor : ticketColor;
       var countLabel = (r.count === 1) ? "bon distribué" : "bons distribués";
-
-      html += '<div class="vt-ticket' + (isTop ? ' vt-top' : '') + '"' +
-              (isTop ? ' style="border-color:' + esc(highlightColor) + '"' : '') + '>';
-      if (isTop) {
-        html += '<div class="vt-badge" style="background:' + esc(highlightColor) + '">Lot principal</div>';
-      }
-      html += '<div class="vt-panel" style="background:' + esc(panelBg) + '">' +
+      html += '<div class="vt-ticket">';
+      html += '<div class="vt-panel" style="background:' + esc(ticketColor) + '">' +
                 '<span class="vt-panel-amount">' + esc(r.label) + '</span>' +
                 '<span class="vt-panel-sub">par bon</span>' +
               '</div>';
