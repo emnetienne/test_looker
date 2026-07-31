@@ -76,7 +76,7 @@ looker.plugins.visualizations.add({
 
     // Renommage ciblé (identique à la version normale)
     const RENAME_RULES = [
-      { keywords: ["trad"], to: "Nombre de client acheteurs de produits animés" }
+      { keywords: ["trad"], to: "Nombre de clients acheteurs de produits animés" }
     ];
     const norm = (s) => (s == null ? "" : String(s))
       .replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim().toLowerCase();
