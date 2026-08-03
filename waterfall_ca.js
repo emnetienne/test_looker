@@ -234,7 +234,9 @@ looker.plugins.visualizations.add({
 
     // --- Helpers formatage FR -------------------------------------------
     // CA arrondi à l'entier, jamais de décimale après la virgule.
-    var nfInt = new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 0 });
+    var nfInt = new Intl.NumberFormat("fr-FR", {
+      style: "currency", currency: "EUR", maximumFractionDigits: 0
+    });
     function fmtInt(v) { return nfInt.format(Math.round(v)); }
     function fmtPct(v) {
       if (!sum) return "0\u00A0%";
