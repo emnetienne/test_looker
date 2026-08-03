@@ -131,6 +131,9 @@ looker.plugins.visualizations.add({
     const totalStages = stages.length;
     if (totalStages === 0) return;
 
+    // Valeur de la première étape, utilisée pour calculer les pourcentages
+    const firstValue = Number(stages[0]?.value) || 1;
+
     const W = element.clientWidth || 1000;
     const H = element.clientHeight || 650;
     if (W < 20 || H < 20) return;
@@ -161,7 +164,8 @@ looker.plugins.visualizations.add({
     const ELLIPSE_FLATNESS = 0.5;
     const capRy = (rx) => Math.min(ry, rx * ELLIPSE_FLATNESS);
 
-    const valueFont = Math.max(11, Math.min(0.42 * stageHeight, 20 * (H / 650)));
+    const valueFont = Math.max(10, Math.min(0.34 * stageHeight, 18 * (H / 650)));
+    const pctFont   = Math.max(9,  Math.min(0.22 * stageHeight, 13 * (H / 650)));
     const labelFont = Math.max(8,  Math.min(0.26 * stageHeight, 14 * (H / 650)));
 
     // Zone des libellés : à DROITE du bord le plus large du cône
@@ -234,14 +238,28 @@ looker.plugins.visualizations.add({
 
       const midY = (topY + bottomY) / 2;
 
+      // Pourcentage par rapport à la première étape
+      const pctRaw = (Number(stage.value) / firstValue) * 100;
+      const pctLabel = pctRaw >= 100 ? "100%" : pctRaw.toFixed(1) + "%";
+
       // Valeur (centrée dans le cône, à gauche)
       const textVal = document.createElementNS(SVGNS, "text");
       textVal.setAttribute("x", funnelCenterX);
-      textVal.setAttribute("y", midY);
+      textVal.setAttribute("y", midY - valueFont * 0.45);
       textVal.setAttribute("class", "funnel-value-text");
       textVal.style.fontSize = valueFont + "px";
       textVal.textContent = Number(stage.value).toLocaleString();
       g.appendChild(textVal);
+
+      // Pourcentage (sous la valeur, dans le cône)
+      const textPct = document.createElementNS(SVGNS, "text");
+      textPct.setAttribute("x", funnelCenterX);
+      textPct.setAttribute("y", midY + pctFont * 0.85);
+      textPct.setAttribute("class", "funnel-value-text");
+      textPct.style.fontSize = pctFont + "px";
+      textPct.style.opacity = "0.85";
+      textPct.textContent = pctLabel;
+      g.appendChild(textPct);
 
       // Libellé multi-lignes, dans la zone droite (jamais sur le cône)
       const lines = wrapText(displayLabel(stage), maxChars);
