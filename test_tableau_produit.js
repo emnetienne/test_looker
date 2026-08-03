@@ -25,20 +25,6 @@ looker.plugins.visualizations.add({
   /*  Options exposées dans le panneau de configuration Looker               */
   /* ----------------------------------------------------------------------- */
   options: {
-    title_text: {
-      section: "Style",
-      type: "string",
-      label: "Titre",
-      default: "Références animées",
-      order: 1
-    },
-    show_count: {
-      section: "Style",
-      type: "boolean",
-      label: "Afficher le compteur de références",
-      default: true,
-      order: 2
-    },
     show_index: {
       section: "Style",
       type: "boolean",
@@ -128,43 +114,6 @@ looker.plugins.visualizations.add({
         box-shadow: none;
         padding: 8px 10px;
       }
-
-      /* ---- En-tête ---------------------------------------------------- */
-      .ra-header {
-        display: flex;
-        align-items: flex-start;
-        justify-content: space-between;
-        gap: 16px;
-        margin-bottom: 18px;
-        flex: 0 0 auto;
-      }
-      .ra-title {
-        font-family: 'Poppins', 'Inter', sans-serif;
-        font-weight: 700;
-        font-size: 23px;
-        line-height: 1.2;
-        color: var(--ink);
-        margin: 0;
-      }
-      .ra-underline {
-        margin-top: 8px;
-        width: 62px;
-        height: 4px;
-        border-radius: 4px;
-        background: linear-gradient(90deg, var(--blue) 0%, var(--coral) 100%);
-      }
-      .ra-count {
-        flex: 0 0 auto;
-        font-family: 'Poppins', 'Inter', sans-serif;
-        font-weight: 600;
-        font-size: 13px;
-        color: var(--blue);
-        background: var(--cream);
-        border-radius: 999px;
-        padding: 7px 15px;
-        white-space: nowrap;
-      }
-      .ra-card.style-flat .ra-count { background: rgba(61,80,181,0.10); }
 
       /* ---- Liste multi-colonnes (responsive automatique) -------------- */
       .ra-list {
@@ -272,22 +221,8 @@ looker.plugins.visualizations.add({
 
     // -- Construction du HTML ---------------------------------------------
     var isCard = config.card_style !== "flat";
-    var title = escapeHtml(config.title_text || "Références animées");
-    var showCount = config.show_count !== false;
     var showIndex = config.show_index !== false;
     var colW = Number(config.min_col_width) > 0 ? Number(config.min_col_width) : 240;
-
-    var header =
-      '<div class="ra-header">' +
-        '<div>' +
-          '<h2 class="ra-title">' + title + "</h2>" +
-          '<div class="ra-underline"></div>' +
-        "</div>" +
-        (showCount
-          ? '<div class="ra-count">' + values.length +
-            " référence" + (values.length > 1 ? "s" : "") + "</div>"
-          : "") +
-      "</div>";
 
     var body;
     if (!values.length) {
@@ -311,7 +246,6 @@ looker.plugins.visualizations.add({
 
     root.innerHTML =
       '<div class="ra-card ' + (isCard ? "style-card" : "style-flat") + '">' +
-        header +
         body +
       "</div>";
 
