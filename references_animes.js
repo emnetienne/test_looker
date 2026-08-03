@@ -18,7 +18,7 @@
  */
 
 looker.plugins.visualizations.add({
-  id: "refs_animees",
+  id: "references_animes",
   label: "Références animées",
 
   /* ----------------------------------------------------------------------- */
