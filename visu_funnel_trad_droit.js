@@ -161,7 +161,8 @@ looker.plugins.visualizations.add({
     const ELLIPSE_FLATNESS = 0.5;
     const capRy = (rx) => Math.min(ry, rx * ELLIPSE_FLATNESS);
 
-    const valueFont = Math.max(11, Math.min(0.42 * stageHeight, 20 * (H / 650)));
+    const valueFont = Math.max(10, Math.min(0.34 * stageHeight, 18 * (H / 650)));
+    const pctFont   = Math.max(9,  Math.min(0.22 * stageHeight, 13 * (H / 650)));
     const labelFont = Math.max(8,  Math.min(0.26 * stageHeight, 14 * (H / 650)));
 
     // Zone des libellés : à GAUCHE du bord le plus large du cône
@@ -234,14 +235,29 @@ looker.plugins.visualizations.add({
 
       const midY = (topY + bottomY) / 2;
 
+      // Pourcentage par rapport à l'étape précédente (juste au-dessus)
+      const prevValue = i === 0 ? Number(stage.value) : Number(stages[i - 1].value) || 1;
+      const pctRaw = i === 0 ? 100 : (Number(stage.value) / prevValue) * 100;
+      const pctLabel = pctRaw >= 100 ? "100%" : pctRaw.toFixed(1) + "%";
+
       // Valeur (centrée dans le cône, à droite)
       const textVal = document.createElementNS(SVGNS, "text");
       textVal.setAttribute("x", funnelCenterX);
-      textVal.setAttribute("y", midY);
+      textVal.setAttribute("y", midY - valueFont * 0.45);
       textVal.setAttribute("class", "funnel-value-text");
       textVal.style.fontSize = valueFont + "px";
       textVal.textContent = Number(stage.value).toLocaleString();
       g.appendChild(textVal);
+
+      // Pourcentage (sous la valeur, dans le cône)
+      const textPct = document.createElementNS(SVGNS, "text");
+      textPct.setAttribute("x", funnelCenterX);
+      textPct.setAttribute("y", midY + pctFont * 0.85);
+      textPct.setAttribute("class", "funnel-value-text");
+      textPct.style.fontSize = pctFont + "px";
+      textPct.style.opacity = "0.85";
+      textPct.textContent = pctLabel;
+      g.appendChild(textPct);
 
       // Libellé multi-lignes, dans la zone gauche (jamais sur le cône)
       const lines = wrapText(displayLabel(stage), maxChars);
