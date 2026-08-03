@@ -238,7 +238,7 @@ looker.plugins.visualizations.add({
       // Pourcentage par rapport à l'étape précédente (juste au-dessus)
       const prevValue = i === 0 ? Number(stage.value) : Number(stages[i - 1].value) || 1;
       const pctRaw = i === 0 ? 100 : (Number(stage.value) / prevValue) * 100;
-      const pctLabel = pctRaw >= 100 ? "100%" : pctRaw.toFixed(1) + "%";
+      const pctLabel = Math.round(pctRaw) + "%";
 
       // Valeur (centrée dans le cône, à gauche)
       const textVal = document.createElementNS(SVGNS, "text");
@@ -246,7 +246,7 @@ looker.plugins.visualizations.add({
       textVal.setAttribute("y", midY - valueFont * 0.45);
       textVal.setAttribute("class", "funnel-value-text");
       textVal.style.fontSize = valueFont + "px";
-      textVal.textContent = Number(stage.value).toLocaleString();
+      textVal.textContent = Number(stage.value).toLocaleString().replace(/,/g, " ");
       g.appendChild(textVal);
 
       // Pourcentage (sous la valeur, dans le cône)
