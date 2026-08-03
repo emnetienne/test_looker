@@ -34,11 +34,11 @@ looker.plugins.visualizations.add({
     },
     bar_color: {
       section: "Style", type: "string", label: "Couleur barres", display: "color",
-      default: "#EC6A4E", order: 4
+      default: "#FECF6B", order: 4
     },
     total_color: {
       section: "Style", type: "string", label: "Couleur barre Total", display: "color",
-      default: "#7C93D9", order: 5
+      default: "#B6C1E9", order: 5
     },
 
     show_total: {
