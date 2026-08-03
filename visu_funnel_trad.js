@@ -131,9 +131,6 @@ looker.plugins.visualizations.add({
     const totalStages = stages.length;
     if (totalStages === 0) return;
 
-    // Valeur de la première étape, utilisée pour calculer les pourcentages
-    const firstValue = Number(stages[0]?.value) || 1;
-
     const W = element.clientWidth || 1000;
     const H = element.clientHeight || 650;
     if (W < 20 || H < 20) return;
@@ -238,8 +235,9 @@ looker.plugins.visualizations.add({
 
       const midY = (topY + bottomY) / 2;
 
-      // Pourcentage par rapport à la première étape
-      const pctRaw = (Number(stage.value) / firstValue) * 100;
+      // Pourcentage par rapport à l'étape précédente (juste au-dessus)
+      const prevValue = i === 0 ? Number(stage.value) : Number(stages[i - 1].value) || 1;
+      const pctRaw = i === 0 ? 100 : (Number(stage.value) / prevValue) * 100;
       const pctLabel = pctRaw >= 100 ? "100%" : pctRaw.toFixed(1) + "%";
 
       // Valeur (centrée dans le cône, à gauche)
