@@ -43,7 +43,7 @@ looker.plugins.visualizations.add({
     },
     segment_label_size: {
       section: "Style", type: "number", label: "Taille des noms de segment (px)",
-      default: 12.5, order: 6
+      default: 18, order: 6
     },
 
     show_total: {
