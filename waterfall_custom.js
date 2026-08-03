@@ -34,7 +34,7 @@ looker.plugins.visualizations.add({
     },
     bar_color: {
       section: "Style", type: "string", label: "Couleur barres", display: "color",
-      default: "#FECF6B", order: 4
+      default: "#FF755D", order: 4
     },
     total_color: {
       section: "Style", type: "string", label: "Couleur barre Total", display: "color",
