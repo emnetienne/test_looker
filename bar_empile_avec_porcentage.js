@@ -5,13 +5,13 @@
  * Compatible LookML — à déposer comme fichier .js dans le projet Looker.
  *
  * Champs attendus dans l'Explore :
- *  - 1 dimension (la catégorie / le segment)
- *  - 1 mesure (la valeur en €)
+ *  - Option A : 1 dimension + 1 mesure (chaque valeur de la dimension = un segment)
+ *  - Option B : 0 dimension + plusieurs mesures (chaque mesure = un segment)
+ *    -> C'est ce mode qui est utilisé si aucune dimension n'est présente.
  */
 looker.plugins.visualizations.add({
   id: "repartition_ca_pct",
   label: "Répartition CA avec %",
-
   options: {
     color_primary: {
       type: "string",
@@ -44,14 +44,12 @@ looker.plugins.visualizations.add({
       order: 4
     }
   },
-
   // Appelé une seule fois, à la création du visuel
   create: function (element, config) {
     element.innerHTML =
       "<div class='repartition-ca-container' style='width:100%;height:100%;box-sizing:border-box;font-family:Roboto,Arial,sans-serif;'></div>";
     this._container = element.querySelector(".repartition-ca-container");
   },
-
   // Appelé à chaque mise à jour des données / du style
   updateAsync: function (data, element, config, queryResponse, details, done) {
     this.clearErrors();
@@ -59,23 +57,36 @@ looker.plugins.visualizations.add({
     var dimensions = queryResponse.fields.dimension_like;
     var measures = queryResponse.fields.measure_like;
 
-    if (!dimensions.length || !measures.length) {
+    var segments = [];
+
+    if (dimensions.length && measures.length) {
+      // --- Mode A : 1 dimension + 1 mesure ---
+      var dimName = dimensions[0].name;
+      var measureName = measures[0].name;
+      segments = data.map(function (row) {
+        return {
+          label: LookerCharts.Utils.textForCell(row[dimName]),
+          value: (row[measureName] && row[measureName].value) || 0
+        };
+      });
+    } else if (measures.length >= 1 && data.length) {
+      // --- Mode B : pas de dimension, plusieurs mesures ---
+      // Chaque mesure devient un segment ; on prend la première ligne
+      // (les mesures sont déjà agrégées par l'Explore).
+      var row0 = data[0];
+      segments = measures.map(function (m) {
+        return {
+          label: m.label_short || m.label || m.name,
+          value: (row0[m.name] && row0[m.name].value) || 0
+        };
+      });
+    } else {
       this.addError({
         title: "Champs manquants",
-        message: "Cette visualisation nécessite 1 dimension et 1 mesure."
+        message: "Cette visualisation nécessite soit (1 dimension + 1 mesure), soit (plusieurs mesures sans dimension)."
       });
       return;
     }
-
-    var dimName = dimensions[0].name;
-    var measureName = measures[0].name;
-
-    var segments = data.map(function (row) {
-      return {
-        label: LookerCharts.Utils.textForCell(row[dimName]),
-        value: row[measureName].value || 0
-      };
-    });
 
     var total = segments.reduce(function (sum, s) { return sum + s.value; }, 0);
 
@@ -97,7 +108,6 @@ looker.plugins.visualizations.add({
     });
 
     var html = "";
-
     if (config.show_title !== false) {
       html +=
         "<div style='font-size:14px;color:#5f6368;text-align:center;margin-bottom:12px;'>" +
@@ -107,21 +117,19 @@ looker.plugins.visualizations.add({
 
     html +=
       "<div style='display:flex;flex-direction:column;border-radius:6px;overflow:hidden;height:calc(100% - 30px);'>";
-
     segments.forEach(function (seg, i) {
       var pct = total > 0 ? seg.value / total : 0;
       var flexGrow = Math.max(pct * 100, 4);
       html +=
         "<div style='flex:" + flexGrow + ";background-color:" + palette[i % palette.length] +
-        ";display:flex;align-items:center;justify-content:center;color:#fff;font-weight:600;font-size:16px;min-height:28px;text-align:center;padding:4px;box-sizing:border-box;'>" +
-        euroFormatter.format(seg.value) + "  (" + pctFormatter.format(pct) + ")" +
+        ";display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;font-weight:600;font-size:16px;min-height:28px;text-align:center;padding:4px;box-sizing:border-box;'>" +
+        "<div style='font-size:12px;font-weight:400;opacity:0.9;'>" + seg.label + "</div>" +
+        "<div>" + euroFormatter.format(seg.value) + "  (" + pctFormatter.format(pct) + ")</div>" +
         "</div>";
     });
-
     html += "</div>";
 
     this._container.innerHTML = html;
-
     done();
   }
 });
