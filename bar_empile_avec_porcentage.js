@@ -123,8 +123,8 @@ looker.plugins.visualizations.add({
       html +=
         "<div style='flex:" + flexGrow + ";background-color:" + palette[i % palette.length] +
         ";display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;font-weight:600;font-size:16px;min-height:28px;text-align:center;padding:4px;box-sizing:border-box;'>" +
-        "<div style='font-size:12px;font-weight:400;opacity:0.9;'>" + seg.label + "</div>" +
-        "<div>" + euroFormatter.format(seg.value) + "  (" + pctFormatter.format(pct) + ")</div>" +
+        "<div>" + euroFormatter.format(seg.value) + "</div>" +
+        "<div style='font-size:13px;font-weight:400;opacity:0.9;margin-top:2px;'>" + pctFormatter.format(pct) + "</div>" +
         "</div>";
     });
     html += "</div>";
