@@ -25,7 +25,12 @@ looker.plugins.visualizations.add({
     marker_color:  { type: "string", display: "color", label: "Couleur des événements", default: "#111827", section: "Événements optimizer", order: 1 },
     marker_style:  { type: "string", display: "select", label: "Style du repère", values: [{ "Ligne verticale": "line" }, { "Ligne + point": "lineDot" }, { "Point seul": "dot" }], default: "lineDot", section: "Événements optimizer", order: 2 },
     marker_dash:   { type: "boolean", label: "Ligne en pointillés", default: true, section: "Événements optimizer", order: 3 },
-    marker_labels: { type: "boolean", label: "Libellé au sommet du repère", default: false, section: "Événements optimizer", order: 4 }
+    marker_labels: { type: "boolean", label: "Libellé au sommet du repère", default: false, section: "Événements optimizer", order: 4 },
+
+    event_diff:          { type: "boolean", label: "Comparer à l'événement précédent", default: true, section: "Événements optimizer", order: 5 },
+    event_show_previous: { type: "boolean", label: "Afficher la valeur précédente", default: true, section: "Événements optimizer", order: 6 },
+    event_diff_color:    { type: "string", display: "color", label: "Couleur de la valeur modifiée", default: "#F97316", section: "Événements optimizer", order: 7 },
+    event_separator:     { type: "string", label: "Séparateur des valeurs (vide = auto)", default: "", section: "Événements optimizer", order: 8 }
   },
 
   _ensureD3: function () {
@@ -49,6 +54,9 @@ looker.plugins.visualizations.add({
       ".loe-tip .loe-row{display:flex;align-items:center;gap:6px;white-space:nowrap;}" +
       ".loe-tip .loe-dot{width:9px;height:9px;border-radius:50%;display:inline-block;flex:0 0 auto;}" +
       ".loe-tip .loe-evt{margin-top:6px;padding-top:6px;border-top:1px solid rgba(255,255,255,.2);font-weight:600;}" +
+      ".loe-tip .loe-evt .loe-part{display:block;font-weight:400;margin-top:2px;}" +
+      ".loe-tip .loe-old{color:#9aa3af;font-weight:400;}" +
+      ".loe-tip .loe-same{color:#c4cad3;font-weight:400;}" +
       ".loe-axis text{font-size:11px;fill:#5b6472;}" +
       ".loe-axis path,.loe-axis line{stroke:#d7dbe0;}" +
       ".loe-grid line{stroke:#eceef1;}" +
@@ -177,6 +185,75 @@ looker.plugins.visualizations.add({
       var events = rows.filter(function (d) { return hasVal(d.eventCell); }).map(function (d) {
         return { date: d.date, xLabel: d.xLabel, rendered: d.eventCell.rendered != null ? d.eventCell.rendered : String(d.eventCell.value) };
       });
+      // valeur du changement précédent (pour comparaison)
+      events.forEach(function (ev, i) { ev.prev = i > 0 ? events[i - 1].rendered : null; });
+      var evByDate = {};
+      events.forEach(function (ev) { evByDate[+ev.date] = ev; });
+
+      // --- Comparaison "quelle valeur a changé" (tooltip) ---
+      var diffColor = config.event_diff_color || "#F97316";
+      var showPrev = config.event_show_previous !== false;
+      var doDiff = config.event_diff !== false;
+
+      function pickSep(a, b) {
+        if (config.event_separator) return config.event_separator;
+        var cands = [";", "|", "\n", ",", " / "];
+        for (var i = 0; i < cands.length; i++) {
+          var s = cands[i];
+          if (a.indexOf(s) >= 0 && a.split(s).length > 1 && a.split(s).length === b.split(s).length) return s;
+        }
+        return null;
+      }
+      function isKV(t) { return /^[^=]+=.*/.test(t); }
+      function diffParts(cur, prev, sep) {
+        var ca = cur.split(sep).map(function (t) { return t.trim(); });
+        var pa = prev.split(sep).map(function (t) { return t.trim(); });
+        var kv = ca.every(isKV) && pa.every(isKV);
+        var out = [];
+        if (kv) {
+          var pm = {};
+          pa.forEach(function (t) { var i = t.indexOf("="); pm[t.slice(0, i).trim()] = t.slice(i + 1).trim(); });
+          ca.forEach(function (t) {
+            var i = t.indexOf("="), k = t.slice(0, i).trim(), v = t.slice(i + 1).trim();
+            var ov = pm.hasOwnProperty(k) ? pm[k] : null;
+            if (ov === null) {
+              out.push('<span class="loe-part">' + esc(k) + ' = <b style="color:' + diffColor + '">' + esc(v) + '</b> <span class="loe-old">(nouveau)</span></span>');
+            } else if (ov !== v) {
+              out.push('<span class="loe-part">' + esc(k) + ' = <b style="color:' + diffColor + '">' + esc(v) + '</b>' + (showPrev ? ' <span class="loe-old">(avant : ' + esc(ov) + ')</span>' : '') + '</span>');
+            } else {
+              out.push('<span class="loe-part loe-same">' + esc(k) + ' = ' + esc(v) + '</span>');
+            }
+          });
+        } else {
+          ca.forEach(function (v, i) {
+            var ov = i < pa.length ? pa[i] : null;
+            if (ov !== null && ov === v) {
+              out.push('<span class="loe-part loe-same">' + esc(v) + '</span>');
+            } else {
+              out.push('<span class="loe-part"><b style="color:' + diffColor + '">' + esc(v) + '</b>' + (showPrev && ov !== null ? ' <span class="loe-old">(avant : ' + esc(ov) + ')</span>' : '') + '</span>');
+            }
+          });
+        }
+        return out.join("");
+      }
+      function eventTipHtml(ev, topBorder) {
+        var style = topBorder === false ? ' style="border-top:none;padding-top:0;margin-top:0;"' : '';
+        var cur = ev.rendered == null ? "" : String(ev.rendered);
+        var prev = ev.prev == null ? null : String(ev.prev);
+        if (!doDiff || prev == null) {
+          return '<div class="loe-evt"' + style + '>⚙ Changement d\'optimizer : <b>' + esc(cur) + '</b></div>';
+        }
+        var sep = pickSep(cur, prev), body;
+        if (sep) {
+          body = diffParts(cur, prev, sep);
+        } else if (cur === prev) {
+          body = '<span class="loe-part loe-same">' + esc(cur) + ' (inchangé)</span>';
+        } else {
+          body = '<span class="loe-part"><b style="color:' + diffColor + '">' + esc(cur) + '</b>' +
+            (showPrev ? ' <span class="loe-old">(avant : ' + esc(prev) + ')</span>' : '') + '</span>';
+        }
+        return '<div class="loe-evt"' + style + '>⚙ Changement d\'optimizer' + body + '</div>';
+      }
 
       // --- Marges & tailles ---
       var m = { top: 22, right: hasRight ? 66 : 20, bottom: 74, left: 66 };
@@ -295,9 +372,8 @@ looker.plugins.visualizations.add({
           html += '<div class="loe-row"><span class="loe-dot" style="background:' + s.color + '"></span>' +
             esc(s.label) + ' : <b>' + esc(p ? p.rendered : "∅") + "</b></div>";
         });
-        if (hasVal(d.eventCell)) {
-          var r = d.eventCell.rendered != null ? d.eventCell.rendered : String(d.eventCell.value);
-          html += '<div class="loe-evt">⚙ Changement d\'optimizer : ' + esc(r) + "</div>";
+        if (evByDate[+d.date]) {
+          html += eventTipHtml(evByDate[+d.date], true);
         }
         showTip(html, evt);
       }).on("mouseleave", function () { hideTip(); guide.style("opacity", 0); });
@@ -310,8 +386,7 @@ looker.plugins.visualizations.add({
           .style("fill", "transparent").style("cursor", "pointer")
           .on("mouseenter", function () { guide.attr("x1", px).attr("x2", px).style("opacity", 1); })
           .on("mousemove", function (evt) {
-            var html = '<div class="loe-date">' + esc(ev.xLabel) + "</div>" +
-              '<div class="loe-evt" style="border-top:none;padding-top:0;margin-top:0;">⚙ Changement d\'optimizer : ' + esc(ev.rendered) + "</div>";
+            var html = '<div class="loe-date">' + esc(ev.xLabel) + "</div>" + eventTipHtml(ev, false);
             showTip(html, evt);
           })
           .on("mouseleave", function () { hideTip(); guide.style("opacity", 0); });
