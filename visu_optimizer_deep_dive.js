@@ -57,6 +57,10 @@ looker.plugins.visualizations.add({
       ".loe-tip .loe-evt .loe-part{display:block;font-weight:400;margin-top:2px;}" +
       ".loe-tip .loe-old{color:#9aa3af;font-weight:400;}" +
       ".loe-tip .loe-same{color:#c4cad3;font-weight:400;}" +
+      ".loe-tip .loe-grp{margin-top:7px;}" +
+      ".loe-tip .loe-gname{font-weight:700;font-size:12px;letter-spacing:.2px;}" +
+      ".loe-tip .loe-gline{font-weight:400;margin-left:2px;}" +
+      ".loe-tip .loe-lbl{display:inline-block;min-width:60px;color:#aeb6c2;font-size:11px;}" +
       ".loe-axis text{font-size:11px;fill:#5b6472;}" +
       ".loe-axis path,.loe-axis line{stroke:#d7dbe0;}" +
       ".loe-grid line{stroke:#eceef1;}" +
@@ -205,6 +209,20 @@ looker.plugins.visualizations.add({
         return null;
       }
       function isKV(t) { return /^[^=]+=.*/.test(t); }
+
+      // Détecte les groupes de la forme  "Nom: (v1, v2, ...)"  (ex: Chances, Seuils)
+      function parseGroups(str) {
+        var re = /([^():]+?)\s*:\s*\(([^)]*)\)/g, out = [], mt;
+        while ((mt = re.exec(str)) !== null) {
+          out.push({
+            name: mt[1].replace(/^[\s,;|]+|[\s,;|]+$/g, ""),
+            values: mt[2].split(",").map(function (s) { return s.trim(); }).filter(function (s) { return s.length; })
+          });
+        }
+        return out;
+      }
+      function joinEsc(arr) { return arr.map(function (v) { return esc(v); }).join(", "); }
+
       function diffParts(cur, prev, sep) {
         var ca = cur.split(sep).map(function (t) { return t.trim(); });
         var pa = prev.split(sep).map(function (t) { return t.trim(); });
@@ -236,12 +254,45 @@ looker.plugins.visualizations.add({
         }
         return out.join("");
       }
+
       function eventTipHtml(ev, topBorder) {
         var style = topBorder === false ? ' style="border-top:none;padding-top:0;margin-top:0;"' : '';
+        var head = '<div class="loe-evt"' + style + '>⚙ Changement d\'optimizer';
         var cur = ev.rendered == null ? "" : String(ev.rendered);
         var prev = ev.prev == null ? null : String(ev.prev);
+
+        // --- Mode groupé : "Chances: (...)  Seuils: (...)" ---
+        var curG = doDiff ? parseGroups(cur) : [];
+        if (curG.length) {
+          var pmap = {};
+          if (prev != null) parseGroups(prev).forEach(function (g) { pmap[g.name] = g.values; });
+          var blocks = curG.map(function (g) {
+            var ov = pmap.hasOwnProperty(g.name) ? pmap[g.name] : null;
+            var h = '<div class="loe-grp"><div class="loe-gname">' + esc(g.name) + '</div>';
+            if (prev == null || ov == null) {
+              h += '<div class="loe-gline">' + joinEsc(g.values) +
+                (prev == null ? '' : ' <span class="loe-old">(nouveau)</span>') + '</div>';
+            } else {
+              var changed = g.values.length !== ov.length || g.values.some(function (v, i) { return v !== ov[i]; });
+              if (!changed) {
+                h += '<div class="loe-gline">' + joinEsc(g.values) + ' <span class="loe-old">(inchangé)</span></div>';
+              } else {
+                var nline = g.values.map(function (v, i) {
+                  var o = i < ov.length ? ov[i] : null;
+                  return (o === null || o !== v) ? '<b style="color:' + diffColor + '">' + esc(v) + '</b>' : esc(v);
+                }).join(", ");
+                h += '<div class="loe-gline"><span class="loe-lbl">Nouveau :</span> ' + nline + '</div>';
+                if (showPrev) h += '<div class="loe-gline loe-old"><span class="loe-lbl">Avant :</span> ' + joinEsc(ov) + '</div>';
+              }
+            }
+            return h + '</div>';
+          }).join("");
+          return head + blocks + '</div>';
+        }
+
+        // --- Fallback : valeur simple ou multi-champs séparés ---
         if (!doDiff || prev == null) {
-          return '<div class="loe-evt"' + style + '>⚙ Changement d\'optimizer : <b>' + esc(cur) + '</b></div>';
+          return head + ' : <b>' + esc(cur) + '</b></div>';
         }
         var sep = pickSep(cur, prev), body;
         if (sep) {
@@ -252,7 +303,7 @@ looker.plugins.visualizations.add({
           body = '<span class="loe-part"><b style="color:' + diffColor + '">' + esc(cur) + '</b>' +
             (showPrev ? ' <span class="loe-old">(avant : ' + esc(prev) + ')</span>' : '') + '</span>';
         }
-        return '<div class="loe-evt"' + style + '>⚙ Changement d\'optimizer' + body + '</div>';
+        return head + body + '</div>';
       }
 
       // --- Marges & tailles ---
