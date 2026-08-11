@@ -108,17 +108,27 @@ looker.plugins.visualizations.add({
       var xDim = dims[0].name;
       var eventDim = dims.length > 1 ? dims[1].name : null;
 
-      // --- Lignes de données (triées par date) ---
-      var rows = data.map(function (r) {
+      // --- Regroupe par date (dédoublonne les dates identiques) ---
+      var _map = new Map();
+      data.forEach(function (r) {
         var xc = r[xDim] || {};
-        return {
-          date: xc.value != null ? new Date(xc.value) : null,
-          xLabel: xc.rendered != null ? xc.rendered : xc.value,
-          eventCell: eventDim ? (r[eventDim] || {}) : null,
-          row: r
-        };
-      }).filter(function (d) { return d.date && !isNaN(d.date.getTime()); });
-      rows.sort(function (a, b) { return a.date - b.date; });
+        if (xc.value == null) return;
+        var dt = new Date(xc.value);
+        if (isNaN(dt.getTime())) return;
+        var k = +dt;
+        var slot = _map.get(k);
+        if (!slot) {
+          _map.set(k, {
+            date: dt,
+            xLabel: xc.rendered != null ? xc.rendered : xc.value,
+            row: r,
+            eventCell: eventDim ? (r[eventDim] || {}) : null
+          });
+        } else if (eventDim && hasVal(r[eventDim])) {
+          slot.eventCell = r[eventDim];
+        }
+      });
+      var rows = Array.from(_map.values()).sort(function (a, b) { return a.date - b.date; });
 
       if (!rows.length) { wrap.querySelectorAll("svg").forEach(function (n) { n.remove(); }); done(); return; }
 
@@ -161,7 +171,12 @@ looker.plugins.visualizations.add({
       var iw = Math.max(10, W - m.left - m.right);
       var ih = Math.max(10, H - m.top - m.bottom);
 
-      var x = d3.scaleTime().domain(d3.extent(rows, function (d) { return d.date; })).range([0, iw]);
+      var xExtent = d3.extent(rows, function (d) { return d.date; });
+      var xSpan = (xExtent[1] - xExtent[0]) || 864e5; // 1 jour par défaut si une seule date
+      var xPad = xSpan * 0.04;                         // ~4% de marge de chaque côté
+      var x = d3.scaleTime()
+        .domain([new Date(+xExtent[0] - xPad), new Date(+xExtent[1] + xPad)])
+        .range([0, iw]);
       var yL = d3.scaleLinear().domain([0, leftMax]).nice().range([ih, 0]);
       var yR = d3.scaleLinear().domain([0, rightMax]).nice().range([ih, 0]);
 
@@ -189,9 +204,14 @@ looker.plugins.visualizations.add({
         g.append("g").attr("class", "loe-axis").attr("transform", "translate(" + iw + ",0)")
           .call(d3.axisRight(yR).ticks(5).tickFormat(function (d) { return fmtNum(d).replace("G", "Md"); }));
       }
-      var xTicks = Math.max(4, Math.floor(iw / 90));
+      // graduations = dates réelles, sous-échantillonnées -> plus aucun doublon de libellé
+      var maxTicks = Math.max(2, Math.floor(iw / 95));
+      var stepT = Math.max(1, Math.ceil(rows.length / maxTicks));
+      var tickVals = rows.filter(function (d, i) { return i % stepT === 0; }).map(function (d) { return d.date; });
+      var lastDate = rows[rows.length - 1].date;
+      if (tickVals[tickVals.length - 1] !== lastDate) tickVals.push(lastDate);
       g.append("g").attr("class", "loe-axis").attr("transform", "translate(0," + ih + ")")
-        .call(d3.axisBottom(x).ticks(xTicks).tickFormat(d3.timeFormat("%d/%m/%y")))
+        .call(d3.axisBottom(x).tickValues(tickVals).tickFormat(d3.timeFormat("%d/%m/%y")))
         .selectAll("text").attr("transform", "rotate(-40)").style("text-anchor", "end");
 
       // --- Événements (repères verticaux) ---
