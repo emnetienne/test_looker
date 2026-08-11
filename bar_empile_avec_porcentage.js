@@ -33,7 +33,7 @@ looker.plugins.visualizations.add({
   // Appelé une seule fois, à la création du visuel
   create: function (element, config) {
     element.innerHTML =
-      "<div class='repartition-ca-container' style='width:100%;height:100%;box-sizing:border-box;font-family:Roboto,Arial,sans-serif;'></div>";
+      "<div class='repartition-ca-container' style='width:100%;height:100%;box-sizing:border-box;font-family:Roboto,Arial,sans-serif;overflow:hidden;'></div>";
     this._container = element.querySelector(".repartition-ca-container");
   },
   // Appelé à chaque mise à jour des données / du style
@@ -102,19 +102,34 @@ looker.plugins.visualizations.add({
       minimumFractionDigits: 1,
       maximumFractionDigits: 1
     });
+
+    // Hauteur minimale nécessaire pour que le texte (montant + %) ne soit
+    // jamais coupé, quelle que soit la petitesse du segment en proportion.
+    var MIN_SEGMENT_HEIGHT = 92; // px : 32px (montant) + 4px marge + 22px (%) + paddings
+
+    var containerHeight = this._container.clientHeight || element.clientHeight || 400;
+
     var html =
-      "<div style='display:flex;flex-direction:column;border-radius:6px;overflow:hidden;height:100%;'>";
+      "<div style='display:flex;flex-direction:column;border-radius:6px;height:100%;min-height:" +
+      (segments.length * MIN_SEGMENT_HEIGHT) + "px;'>";
     segments.forEach(function (seg, i) {
       var pct = total > 0 ? seg.value / total : 0;
       var flexGrow = Math.max(pct * 100, 4);
       html +=
-        "<div style='flex:" + flexGrow + ";background-color:" + palette[i % palette.length] +
-        ";display:flex;flex-direction:column;align-items:center;justify-content:flex-start;color:#fff;font-weight:700;font-size:32px;min-height:28px;text-align:center;padding:10px 4px 4px;box-sizing:border-box;overflow:hidden;'>" +
-        "<div>" + euroFormatter.format(seg.value) + "</div>" +
-        "<div style='font-size:22px;font-weight:500;opacity:0.9;margin-top:4px;'>" + pctFormatter.format(pct) + "</div>" +
+        "<div style='flex:" + flexGrow + " 1 0;background-color:" + palette[i % palette.length] +
+        ";display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:32px;min-height:" +
+        MIN_SEGMENT_HEIGHT + "px;text-align:center;padding:8px 4px;box-sizing:border-box;'>" +
+        "<div style='line-height:1.1;'>" + euroFormatter.format(seg.value) + "</div>" +
+        "<div style='font-size:22px;font-weight:500;opacity:0.9;margin-top:4px;line-height:1.1;'>" + pctFormatter.format(pct) + "</div>" +
         "</div>";
     });
     html += "</div>";
+
+    // Si la hauteur totale nécessaire dépasse l'espace du tile Looker,
+    // on laisse le conteneur scroller plutôt que de couper le texte.
+    this._container.style.overflowY =
+      segments.length * MIN_SEGMENT_HEIGHT > containerHeight ? "auto" : "hidden";
+
     this._container.innerHTML = html;
     done();
   }
