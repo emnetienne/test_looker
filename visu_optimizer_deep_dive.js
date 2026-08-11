@@ -62,6 +62,17 @@ looker.plugins.visualizations.add({
     this._tip = document.createElement("div");
     this._tip.className = "loe-tip";
     this._wrap.appendChild(this._tip);
+
+    // Redessine automatiquement quand la tuile est redimensionnée (responsive)
+    var self = this;
+    this._redraw = null;
+    if (window.ResizeObserver && !this._ro) {
+      this._ro = new ResizeObserver(function () {
+        if (self._raf) cancelAnimationFrame(self._raf);
+        self._raf = requestAnimationFrame(function () { if (self._redraw) self._redraw(); });
+      });
+      this._ro.observe(element);
+    }
   },
 
   updateAsync: function (data, element, config, queryResponse, details, done) {
@@ -84,6 +95,7 @@ looker.plugins.visualizations.add({
     }
 
     self._ensureD3().then(function (d3) {
+      self._redraw = function () { render(d3); };
       render(d3);
       done();
     });
