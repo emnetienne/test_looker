@@ -70,6 +70,22 @@ looker.plugins.visualizations.add({
       });
       return;
     }
+    // Force l'ordre : "Incrémental" toujours en haut, "Naturel" toujours en bas.
+    // Les autres segments éventuels gardent leur ordre d'origine, insérés entre les deux.
+    function rank(label) {
+      var l = (label || "")
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[̀-ͯ]/g, ""); // enlève les accents (é -> e)
+      if (l.indexOf("increment") !== -1) return 0;
+      if (l.indexOf("naturel") !== -1 || l.indexOf("natural") !== -1) return 2;
+      return 1;
+    }
+    segments = segments
+      .map(function (seg, idx) { return { seg: seg, idx: idx, rank: rank(seg.label) }; })
+      .sort(function (a, b) { return a.rank - b.rank || a.idx - b.idx; })
+      .map(function (x) { return x.seg; });
+
     var total = segments.reduce(function (sum, s) { return sum + s.value; }, 0);
     var palette = [
       config.color_primary || "#2E4FA3",
@@ -93,7 +109,7 @@ looker.plugins.visualizations.add({
       var flexGrow = Math.max(pct * 100, 4);
       html +=
         "<div style='flex:" + flexGrow + ";background-color:" + palette[i % palette.length] +
-        ";display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:32px;min-height:28px;text-align:center;padding:4px;box-sizing:border-box;'>" +
+        ";display:flex;flex-direction:column;align-items:center;justify-content:flex-start;color:#fff;font-weight:700;font-size:32px;min-height:28px;text-align:center;padding:10px 4px 4px;box-sizing:border-box;overflow:hidden;'>" +
         "<div>" + euroFormatter.format(seg.value) + "</div>" +
         "<div style='font-size:22px;font-weight:500;opacity:0.9;margin-top:4px;'>" + pctFormatter.format(pct) + "</div>" +
         "</div>";
