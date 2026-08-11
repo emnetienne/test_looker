@@ -28,20 +28,6 @@ looker.plugins.visualizations.add({
       default: "#FF6F59",
       section: "Style",
       order: 2
-    },
-    show_title: {
-      type: "boolean",
-      label: "Afficher le titre",
-      default: true,
-      section: "Style",
-      order: 3
-    },
-    chart_title: {
-      type: "string",
-      label: "Titre",
-      default: "Répartition du chiffre d'affaires généré",
-      section: "Style",
-      order: 4
     }
   },
   // Appelé une seule fois, à la création du visuel
@@ -53,12 +39,9 @@ looker.plugins.visualizations.add({
   // Appelé à chaque mise à jour des données / du style
   updateAsync: function (data, element, config, queryResponse, details, done) {
     this.clearErrors();
-
     var dimensions = queryResponse.fields.dimension_like;
     var measures = queryResponse.fields.measure_like;
-
     var segments = [];
-
     if (dimensions.length && measures.length) {
       // --- Mode A : 1 dimension + 1 mesure ---
       var dimName = dimensions[0].name;
@@ -87,15 +70,12 @@ looker.plugins.visualizations.add({
       });
       return;
     }
-
     var total = segments.reduce(function (sum, s) { return sum + s.value; }, 0);
-
     var palette = [
       config.color_primary || "#2E4FA3",
       config.color_secondary || "#FF6F59",
       "#34A853", "#FBBC04", "#9C27B0", "#00ACC1"
     ];
-
     var euroFormatter = new Intl.NumberFormat("fr-FR", {
       style: "currency",
       currency: "EUR",
@@ -106,29 +86,19 @@ looker.plugins.visualizations.add({
       minimumFractionDigits: 1,
       maximumFractionDigits: 1
     });
-
-    var html = "";
-    if (config.show_title !== false) {
-      html +=
-        "<div style='font-size:14px;color:#5f6368;text-align:center;margin-bottom:12px;'>" +
-        (config.chart_title || "Répartition du chiffre d'affaires généré") +
-        "</div>";
-    }
-
-    html +=
-      "<div style='display:flex;flex-direction:column;border-radius:6px;overflow:hidden;height:calc(100% - 30px);'>";
+    var html =
+      "<div style='display:flex;flex-direction:column;border-radius:6px;overflow:hidden;height:100%;'>";
     segments.forEach(function (seg, i) {
       var pct = total > 0 ? seg.value / total : 0;
       var flexGrow = Math.max(pct * 100, 4);
       html +=
         "<div style='flex:" + flexGrow + ";background-color:" + palette[i % palette.length] +
-        ";display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;font-weight:600;font-size:16px;min-height:28px;text-align:center;padding:4px;box-sizing:border-box;'>" +
+        ";display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:32px;min-height:28px;text-align:center;padding:4px;box-sizing:border-box;'>" +
         "<div>" + euroFormatter.format(seg.value) + "</div>" +
-        "<div style='font-size:13px;font-weight:400;opacity:0.9;margin-top:2px;'>" + pctFormatter.format(pct) + "</div>" +
+        "<div style='font-size:22px;font-weight:500;opacity:0.9;margin-top:4px;'>" + pctFormatter.format(pct) + "</div>" +
         "</div>";
     });
     html += "</div>";
-
     this._container.innerHTML = html;
     done();
   }
