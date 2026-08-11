@@ -17,7 +17,7 @@ looker.plugins.visualizations.add({
       type: "string",
       label: "Couleur segment 1",
       display: "color",
-      default: "#2E4FA3",
+      default: "#FF6F59",
       section: "Style",
       order: 1
     },
@@ -25,7 +25,7 @@ looker.plugins.visualizations.add({
       type: "string",
       label: "Couleur segment 2",
       display: "color",
-      default: "#FF6F59",
+      default: "#2E4FA3",
       section: "Style",
       order: 2
     }
