@@ -14,11 +14,14 @@ looker.plugins.visualizations.add({
   label: "Treemap (valeur = couleur)",
 
   options: {
-    color_min:       { type: "string", display: "color", label: "Couleur (petites valeurs)", default: "#C7D6FF", section: "Style", order: 1 },
-    color_max:       { type: "string", display: "color", label: "Couleur (grandes valeurs)", default: "#1B3AA6", section: "Style", order: 2 },
-    bg_color:        { type: "string", display: "color", label: "Fond (entre les briques)", default: "#FFFFFF", section: "Style", order: 3 },
-    gap:             { type: "number", label: "Espacement entre briques (px)", default: 6, section: "Style", order: 4 },
-    corner_radius:   { type: "number", label: "Arrondi des coins (px)", default: 12, section: "Style", order: 5 },
+    color_min:       { type: "string", display: "color", label: "Couleur (petites valeurs)", default: "#DCE6FF", section: "Style", order: 1 },
+    color_max:       { type: "string", display: "color", label: "Couleur (grandes valeurs)", default: "#12259E", section: "Style", order: 2 },
+    color_scale:     { type: "string", display: "select", label: "Répartition des couleurs",
+                       values: [{ "Par rang (contraste max)": "rank" }, { "Racine (accentue les écarts)": "pow" }, { "Linéaire": "linear" }],
+                       default: "rank", section: "Style", order: 3 },
+    bg_color:        { type: "string", display: "color", label: "Fond (entre les briques)", default: "#FFFFFF", section: "Style", order: 4 },
+    gap:             { type: "number", label: "Espacement entre briques (px)", default: 6, section: "Style", order: 5 },
+    corner_radius:   { type: "number", label: "Arrondi des coins (px)", default: 12, section: "Style", order: 6 },
     label_size:      { type: "number", label: "Taille du nom (px)", default: 14, section: "Texte", order: 1 },
     show_percent:    { type: "boolean", label: "Afficher le %", default: true, section: "Texte", order: 2 },
     percent_decimals:{ type: "number", label: "Décimales du %", default: 0, section: "Texte", order: 3 },
@@ -135,11 +138,24 @@ looker.plugins.visualizations.add({
       var showVal = config.show_value !== false;
 
       var total = nodes.reduce(function (a, n) { return a + n.value; }, 0) || 1;
+      var mode = config.color_scale || "rank";
       var vals = nodes.map(function (n) { return n.value; });
       var minV = Math.min.apply(null, vals);
       var maxV = Math.max.apply(null, vals);
-      var t = d3.scaleLinear().domain(minV === maxV ? [0, maxV || 1] : [minV, maxV]).range([0, 1]).clamp(true);
+      var dom = minV === maxV ? [0, maxV || 1] : [minV, maxV];
+      var lin = d3.scaleLinear().domain(dom).range([0, 1]).clamp(true);
+      var pw = d3.scalePow().exponent(0.4).domain(dom).range([0, 1]).clamp(true);
+      // rang : chaque brique prend un pas de couleur distinct (contraste maximal)
+      var order = nodes.slice().sort(function (a, b) { return a.value - b.value; });
+      var nOrd = order.length;
+      var rankT = new Map();
+      order.forEach(function (nd, i) { rankT.set(nd, nOrd <= 1 ? 1 : i / (nOrd - 1)); });
       var interp = d3.interpolateRgb(cMin, cMax);
+      function tOf(node) {
+        if (mode === "rank") { var r = rankT.get(node); return r == null ? 1 : r; }
+        if (mode === "pow") return pw(node.value);
+        return lin(node.value);
+      }
 
       var root = d3.hierarchy({ children: nodes })
         .sum(function (d) { return d.value; })
@@ -157,7 +173,7 @@ looker.plugins.visualizations.add({
       var html = "";
       root.leaves().forEach(function (leaf) {
         var d = leaf.data;
-        var bg = interp(t(d.value));
+        var bg = interp(tOf(d));
         var fg = textColor(d3, bg);
         var cw = leaf.x1 - leaf.x0;
         var ch = leaf.y1 - leaf.y0;
