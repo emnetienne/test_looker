@@ -65,17 +65,53 @@ looker.plugins.visualizations.add({
       if (!cell) return "";
       return cell.rendered != null ? cell.rendered : cell.value;
     }
-    function parseAmount(str) {
+
+    // Parse UN nombre : "50 €" -> 50 ; "1 234,50 €" -> 1234.5
+    function parseNumber(str) {
       if (str == null) return null;
-      var s = String(str).replace(/\u00a0/g, " ").replace(/\s/g, "");
+      var s = String(str).replace(/ /g, " ").replace(/\s/g, "");
       s = s.replace(/[^0-9.,-]/g, "");
-      if (s === "") return null;
+      if (s === "" || !/\d/.test(s)) return null;
       if (s.indexOf(",") > -1 && s.indexOf(".") > -1) s = s.replace(/\./g, "").replace(",", ".");
       else if (s.indexOf(",") > -1) s = s.replace(",", ".");
       var n = parseFloat(s);
       return isNaN(n) ? null : n;
     }
-    function fmt(n) { return Number(n).toLocaleString("fr-FR"); }
+
+    // Un fragment est "purement montant" s'il ne contient que chiffres,
+    // séparateurs et symbole monétaire (pas de texte).
+    function isPureAmount(part) {
+      var s = String(part).replace(/ /g, " ").replace(/[€$£¥]/g, "").trim();
+      if (!/\d/.test(s)) return false;
+      return !/[A-Za-zÀ-ſ]/.test(s);
+    }
+
+    // Valeur d'UN bon, en gérant les libellés multiplicatifs :
+    //   "5 €"      -> 5
+    //   "4 x 50€"  -> 200   (et non 450, bug corrigé)
+    //   "2 × 10 €" -> 20
+    //   "3*25€"    -> 75
+    function parseAmount(label) {
+      if (label == null) return null;
+      var raw = String(label).replace(/ /g, " ");
+      var parts = raw.split(/[x×X*]/);
+      // Multiplication reconnue uniquement si TOUS les fragments sont des montants.
+      // ("Bon max 50 €" -> repli sur le parsing simple = 50)
+      if (parts.length >= 2 && parts.every(isPureAmount)) {
+        var product = 1;
+        for (var i = 0; i < parts.length; i++) {
+          var n = parseNumber(parts[i]);
+          if (n == null) return parseNumber(raw);
+          product *= n;
+        }
+        return product;
+      }
+      return parseNumber(raw);
+    }
+
+    function fmt(n) {
+      return Number(n).toLocaleString("fr-FR", { maximumFractionDigits: 2 });
+    }
 
     var rows = data.map(function (row) {
       var label = cellText(row[dimKey]);
