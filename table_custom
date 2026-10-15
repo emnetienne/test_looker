@@ -1,0 +1,111 @@
+/* Tableau auto-ajusté pour Looker Studio
+ * Réduit la taille du texte jusqu'à ce que toutes les lignes tiennent dans la zone. */
+
+function styleVal(style, id, fallback) {
+  const s = style && style[id];
+  if (!s) return fallback;
+  let v = s.value !== undefined && s.value !== null && s.value !== '' ? s.value : s.defaultValue;
+  if (v && typeof v === 'object' && v.color) v = v.color;
+  return v === undefined || v === null || v === '' ? fallback : v;
+}
+
+const nf = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 2 });
+
+function formatValue(value, field) {
+  if (value === null || value === undefined || value === '') return '';
+  const type = (field && field.type) || '';
+  if (type === 'YEAR_MONTH_DAY' && /^\d{8}$/.test(String(value))) {
+    const s = String(value);
+    return s.slice(6, 8) + '-' + s.slice(4, 6) + '-' + s.slice(0, 4);
+  }
+  if (type.indexOf('PERCENT') !== -1 && !isNaN(value)) {
+    return Math.round(Number(value) * 100) + '%';
+  }
+  if (typeof value === 'number' || (!isNaN(value) && type.indexOf('NUMBER') !== -1)) {
+    return nf.format(Number(value));
+  }
+  return String(value);
+}
+
+function isNumeric(field) {
+  const t = (field && field.type) || '';
+  return field && field.concept === 'METRIC' || t.indexOf('NUMBER') !== -1 || t.indexOf('PERCENT') !== -1 || t.indexOf('CURRENCY') !== -1;
+}
+
+function drawViz(data) {
+  const width = dscc.getWidth();
+  const height = dscc.getHeight();
+  const style = data.style;
+
+  let root = document.getElementById('af-root');
+  if (!root) {
+    root = document.createElement('div');
+    root.id = 'af-root';
+    document.body.appendChild(root);
+  }
+  root.style.width = width + 'px';
+  root.style.height = height + 'px';
+  root.className = styleVal(style, 'wrapText', true) ? '' : 'nowrap';
+  root.innerHTML = '';
+
+  const fields = (data.fields.dimensions || []).map(f => Object.assign({ concept: 'DIMENSION' }, f))
+    .concat((data.fields.metrics || []).map(f => Object.assign({ concept: 'METRIC' }, f)));
+  const rows = data.tables.DEFAULT || [];
+  const showIdx = styleVal(style, 'showRowNumbers', true);
+  const headerBg = styleVal(style, 'headerColor', '#3653AE');
+  const headerFg = styleVal(style, 'headerTextColor', '#FFFFFF');
+  const stripe = styleVal(style, 'stripeColor', '#F0F2F1');
+
+  const table = document.createElement('table');
+  const thead = document.createElement('thead');
+  const hr = document.createElement('tr');
+  if (showIdx) hr.appendChild(document.createElement('th'));
+  fields.forEach(f => {
+    const th = document.createElement('th');
+    th.textContent = f.name;
+    if (isNumeric(f)) th.className = 'num';
+    hr.appendChild(th);
+  });
+  hr.querySelectorAll('th').forEach(th => { th.style.background = headerBg; th.style.color = headerFg; });
+  thead.appendChild(hr);
+  table.appendChild(thead);
+
+  const tbody = document.createElement('tbody');
+  rows.forEach((row, i) => {
+    const tr = document.createElement('tr');
+    if (i % 2 === 1) tr.style.background = stripe;
+    if (showIdx) {
+      const td = document.createElement('td');
+      td.className = 'idx';
+      td.textContent = i + 1;
+      tr.appendChild(td);
+    }
+    const values = (row.dimensions || []).concat(row.metrics || []);
+    values.forEach((v, j) => {
+      const td = document.createElement('td');
+      td.textContent = formatValue(v, fields[j]);
+      if (isNumeric(fields[j])) td.className = 'num';
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+  root.appendChild(table);
+
+  // Ajustement : plus grande taille de texte qui fait tout tenir (recherche dichotomique)
+  let lo = Number(styleVal(style, 'minFontSize', 8));
+  let hi = Number(styleVal(style, 'maxFontSize', 16));
+  const fits = size => {
+    root.style.fontSize = size + 'px';
+    return table.offsetHeight <= height && table.scrollWidth <= width + 1;
+  };
+  if (fits(hi)) return;
+  let best = lo;
+  while (hi - lo > 0.25) {
+    const mid = (lo + hi) / 2;
+    if (fits(mid)) { best = mid; lo = mid; } else { hi = mid; }
+  }
+  root.style.fontSize = best + 'px';
+}
+
+dscc.subscribeToData(drawViz, { transform: dscc.objectTransform });
