@@ -1,111 +1,100 @@
-/* Tableau auto-ajusté pour Looker Studio
- * Réduit la taille du texte jusqu'à ce que toutes les lignes tiennent dans la zone. */
+/* Tableau auto-ajusté pour Looker
+ * Réduit la taille du texte jusqu'à ce que toutes les lignes tiennent dans la zone, sans scroll. */
 
-function styleVal(style, id, fallback) {
-  const s = style && style[id];
-  if (!s) return fallback;
-  let v = s.value !== undefined && s.value !== null && s.value !== '' ? s.value : s.defaultValue;
-  if (v && typeof v === 'object' && v.color) v = v.color;
-  return v === undefined || v === null || v === '' ? fallback : v;
-}
+looker.plugins.visualizations.add({
+  id: "table_autofit",
+  label: "Tableau auto-ajusté",
+  options: {
+    header_color: { type: "string", label: "Couleur de l'en-tête", display: "color", default: "#3653AE", section: "Style", order: 1 },
+    header_text_color: { type: "string", label: "Texte de l'en-tête", display: "color", default: "#FFFFFF", section: "Style", order: 2 },
+    stripe_color: { type: "string", label: "Lignes alternées", display: "color", default: "#F0F2F1", section: "Style", order: 3 },
+    max_font: { type: "number", label: "Taille de texte max (px)", default: 16, section: "Style", order: 4 },
+    min_font: { type: "number", label: "Taille de texte min (px)", default: 8, section: "Style", order: 5 },
+    wrap_text: { type: "boolean", label: "Retour à la ligne", default: true, section: "Style", order: 6 },
+    show_row_numbers: { type: "boolean", label: "Numéros de ligne", default: true, section: "Style", order: 7 }
+  },
 
-const nf = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 2 });
+  create: function (element) {
+    element.innerHTML =
+      "<style>" +
+      "html,body{margin:0;padding:0;overflow:hidden}" +
+      ".af-root{box-sizing:border-box;width:100%;height:100%;overflow:hidden;font-family:Roboto,Arial,sans-serif;color:#202124}" +
+      ".af-root table{width:100%;border-collapse:collapse}" +
+      ".af-root th{text-align:left;font-weight:500;vertical-align:bottom;padding:.45em .7em;line-height:1.35}" +
+      ".af-root td{padding:.35em .7em;line-height:1.35;vertical-align:top;border-right:1px solid #DADCE0}" +
+      ".af-root td:last-child{border-right:none}" +
+      ".af-root .num{text-align:right;font-variant-numeric:tabular-nums}" +
+      ".af-root td.idx{color:#5F6368;width:1%}" +
+      ".af-root.nowrap td,.af-root.nowrap th{white-space:nowrap}" +
+      "</style><div class='af-root'></div>";
+    this._root = element.querySelector(".af-root");
+  },
 
-function formatValue(value, field) {
-  if (value === null || value === undefined || value === '') return '';
-  const type = (field && field.type) || '';
-  if (type === 'YEAR_MONTH_DAY' && /^\d{8}$/.test(String(value))) {
-    const s = String(value);
-    return s.slice(6, 8) + '-' + s.slice(4, 6) + '-' + s.slice(0, 4);
-  }
-  if (type.indexOf('PERCENT') !== -1 && !isNaN(value)) {
-    return Math.round(Number(value) * 100) + '%';
-  }
-  if (typeof value === 'number' || (!isNaN(value) && type.indexOf('NUMBER') !== -1)) {
-    return nf.format(Number(value));
-  }
-  return String(value);
-}
+  updateAsync: function (data, element, config, queryResponse, details, done) {
+    this.clearErrors();
+    const root = this._root;
+    const opt = function (k, d) { return config[k] === undefined || config[k] === null || config[k] === "" ? d : config[k]; };
 
-function isNumeric(field) {
-  const t = (field && field.type) || '';
-  return field && field.concept === 'METRIC' || t.indexOf('NUMBER') !== -1 || t.indexOf('PERCENT') !== -1 || t.indexOf('CURRENCY') !== -1;
-}
+    const dims = queryResponse.fields.dimension_like || [];
+    const meas = queryResponse.fields.measure_like || [];
+    const tcs = queryResponse.fields.table_calculations || [];
+    const fields = dims.map(function (f) { return { f: f, num: false }; })
+      .concat(meas.concat(tcs).map(function (f) { return { f: f, num: true }; }));
 
-function drawViz(data) {
-  const width = dscc.getWidth();
-  const height = dscc.getHeight();
-  const style = data.style;
-
-  let root = document.getElementById('af-root');
-  if (!root) {
-    root = document.createElement('div');
-    root.id = 'af-root';
-    document.body.appendChild(root);
-  }
-  root.style.width = width + 'px';
-  root.style.height = height + 'px';
-  root.className = styleVal(style, 'wrapText', true) ? '' : 'nowrap';
-  root.innerHTML = '';
-
-  const fields = (data.fields.dimensions || []).map(f => Object.assign({ concept: 'DIMENSION' }, f))
-    .concat((data.fields.metrics || []).map(f => Object.assign({ concept: 'METRIC' }, f)));
-  const rows = data.tables.DEFAULT || [];
-  const showIdx = styleVal(style, 'showRowNumbers', true);
-  const headerBg = styleVal(style, 'headerColor', '#3653AE');
-  const headerFg = styleVal(style, 'headerTextColor', '#FFFFFF');
-  const stripe = styleVal(style, 'stripeColor', '#F0F2F1');
-
-  const table = document.createElement('table');
-  const thead = document.createElement('thead');
-  const hr = document.createElement('tr');
-  if (showIdx) hr.appendChild(document.createElement('th'));
-  fields.forEach(f => {
-    const th = document.createElement('th');
-    th.textContent = f.name;
-    if (isNumeric(f)) th.className = 'num';
-    hr.appendChild(th);
-  });
-  hr.querySelectorAll('th').forEach(th => { th.style.background = headerBg; th.style.color = headerFg; });
-  thead.appendChild(hr);
-  table.appendChild(thead);
-
-  const tbody = document.createElement('tbody');
-  rows.forEach((row, i) => {
-    const tr = document.createElement('tr');
-    if (i % 2 === 1) tr.style.background = stripe;
-    if (showIdx) {
-      const td = document.createElement('td');
-      td.className = 'idx';
-      td.textContent = i + 1;
-      tr.appendChild(td);
+    if (!fields.length) {
+      this.addError({ title: "Aucun champ", message: "Ajoutez au moins une dimension ou une mesure." });
+      return done();
     }
-    const values = (row.dimensions || []).concat(row.metrics || []);
-    values.forEach((v, j) => {
-      const td = document.createElement('td');
-      td.textContent = formatValue(v, fields[j]);
-      if (isNumeric(fields[j])) td.className = 'num';
-      tr.appendChild(td);
+
+    const showIdx = opt("show_row_numbers", true);
+    const headerBg = opt("header_color", "#3653AE");
+    const headerFg = opt("header_text_color", "#FFFFFF");
+    const stripe = opt("stripe_color", "#F0F2F1");
+    root.className = "af-root" + (opt("wrap_text", true) ? "" : " nowrap");
+
+    const esc = function (s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); };
+    const cellText = function (cell) {
+      if (!cell) return "";
+      if (cell.rendered !== undefined && cell.rendered !== null) return cell.rendered;
+      return cell.value === null || cell.value === undefined ? "" : cell.value;
+    };
+
+    let html = "<table><thead><tr>";
+    if (showIdx) html += "<th style='background:" + headerBg + "'></th>";
+    fields.forEach(function (x) {
+      const label = x.f.label_short || x.f.label || x.f.name;
+      html += "<th class='" + (x.num ? "num" : "") + "' style='background:" + headerBg + ";color:" + headerFg + "'>" + esc(label) + "</th>";
     });
-    tbody.appendChild(tr);
-  });
-  table.appendChild(tbody);
-  root.appendChild(table);
+    html += "</tr></thead><tbody>";
+    data.forEach(function (row, i) {
+      html += "<tr" + (i % 2 === 1 ? " style='background:" + stripe + "'" : "") + ">";
+      if (showIdx) html += "<td class='num idx'>" + (i + 1) + "</td>";
+      fields.forEach(function (x) {
+        html += "<td class='" + (x.num ? "num" : "") + "'>" + esc(cellText(row[x.f.name])) + "</td>";
+      });
+      html += "</tr>";
+    });
+    html += "</tbody></table>";
+    root.innerHTML = html;
 
-  // Ajustement : plus grande taille de texte qui fait tout tenir (recherche dichotomique)
-  let lo = Number(styleVal(style, 'minFontSize', 8));
-  let hi = Number(styleVal(style, 'maxFontSize', 16));
-  const fits = size => {
-    root.style.fontSize = size + 'px';
-    return table.offsetHeight <= height && table.scrollWidth <= width + 1;
-  };
-  if (fits(hi)) return;
-  let best = lo;
-  while (hi - lo > 0.25) {
-    const mid = (lo + hi) / 2;
-    if (fits(mid)) { best = mid; lo = mid; } else { hi = mid; }
+    const table = root.querySelector("table");
+    const H = element.clientHeight;
+    const W = element.clientWidth;
+    const fits = function (size) {
+      root.style.fontSize = size + "px";
+      return table.offsetHeight <= H && table.scrollWidth <= W + 1;
+    };
+
+    let lo = Number(opt("min_font", 8));
+    let hi = Number(opt("max_font", 16));
+    if (!fits(hi)) {
+      let best = lo;
+      while (hi - lo > 0.25) {
+        const mid = (lo + hi) / 2;
+        if (fits(mid)) { best = mid; lo = mid; } else { hi = mid; }
+      }
+      root.style.fontSize = best + "px";
+    }
+    done();
   }
-  root.style.fontSize = best + 'px';
-}
-
-dscc.subscribeToData(drawViz, { transform: dscc.objectTransform });
+});
